@@ -127,8 +127,17 @@ export async function POST(req: NextRequest) {
       /* ── update qty ──────────────────────────────────────────── */
       case "update": {
         const j   = await gql(Q.update, { cartId, uid: body.uid, qty: body.qty }, token);
-        const raw = (j.data?.updateCartItems as { cart?: Record<string, unknown> } | undefined)?.cart;
-        return NextResponse.json({ cart: normalizeCart(raw ?? null), error: err(j) });
+        const r   = j.data?.updateCartItems as {
+          cart?: Record<string, unknown>;
+          errors?: { message: string; code?: string }[];
+        } | undefined;
+        const userError = r?.errors?.[0]?.message ?? null;
+        const raw = r?.cart;
+        return NextResponse.json({
+          cart: normalizeCart(raw ?? null),
+          userError,
+          error: userError ?? err(j),
+        });
       }
 
       /* ── remove item ─────────────────────────────────────────── */

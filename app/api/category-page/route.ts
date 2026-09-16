@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CATEGORY_PAGE_QUERY, CATEGORY_UID_BY_URL_KEY_QUERY } from "@/lib/queries";
-import { parseGraphqlResponse, parseAggregations } from "@/lib/magento";
+import { CATEGORY_PAGE_QUERY, CATEGORY_UID_BY_URL_KEY_QUERY, KLEVER_TYRE_BUNDLES_QUERY } from "@/lib/queries";
+import { parseGraphqlResponse, parseAggregations, parseSetPrice } from "@/lib/magento";
 import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
 import { resolveBrandInfo } from "@/lib/services/brands.service";
 import type { Product } from "@/lib/data";
 type SortInput = Record<string, "ASC" | "DESC">;
+
+type KleverBundleProduct = {
+  sku?: string | null;
+  set2_price?: string | number | null;
+};
+
+type KleverTyreBundle = {
+  bundle_price?: number | null;
+  front?: KleverBundleProduct | null;
+  rear?: KleverBundleProduct | null;
+};
 
 /**
  * Staggered (front+rear) pagination has to be computed from the number of
@@ -34,44 +45,39 @@ const STAGGERED_FETCH_CAP = 200;
 const PRICE_SORT_FETCH_CAP = 1000;
 
 /**
- * Pair each front tyre with an unused rear tyre of the same brand — same
- * pattern preferred, any pattern of that brand otherwise. Never crosses
- * brands. Mirrors the matching in StaggeredTyreCard's caller
- * (components/category/CategoryPageInner.tsx) — kept here too so the
- * pagination below reflects the count that will actually render.
+ * Real front+rear pairing AND real combined price from Magento's own
+ * kleverTyreBundles (Klever module) — replaces a former brand/pattern
+ * guessing heuristic plus a naive unitPrice*2+unitPrice*2 sum. The bundle
+ * API is the source of truth for WHICH pairs exist and WHAT they cost;
+ * `allFront`/`allRear` (already fetched for the unpaired fallback listing)
+ * are only used here to hydrate each bundle pair with full product data
+ * (stock status, qty options, image, url_key, etc.) that the lean bundle
+ * response doesn't carry. A bundle with no matching fetched SKU on either
+ * side is dropped rather than rendered with fabricated stock/qty data.
  */
-function pairStaggered(front: Product[], rear: Product[]): { front: Product; rear: Product }[] {
-  const usedRearIds = new Set<string>();
-  const pairs: { front: Product; rear: Product }[] = [];
+function hydrateBundlePairs(
+  bundles: KleverTyreBundle[],
+  front: Product[],
+  rear: Product[],
+): { front: Product; rear: Product; bundlePrice: number; frontSet2Price?: number; rearSet2Price?: number }[] {
+  const frontBySku = new Map(front.map((p) => [p.sku, p]));
+  const rearBySku = new Map(rear.map((p) => [p.sku, p]));
 
-  front.forEach((f) => {
-    const frontBrand = String(f.brandName ?? f.brand ?? "").toLowerCase().trim();
-    const frontPattern = String(f.pattern ?? "").toLowerCase().trim();
-
-    let match = rear.find((r) => {
-      if (usedRearIds.has(r.id)) return false;
-      const rBrand = String(r.brandName ?? r.brand ?? "").toLowerCase().trim();
-      const rPattern = String(r.pattern ?? "").toLowerCase().trim();
-      return rBrand === frontBrand && !!rPattern && !!frontPattern && rPattern === frontPattern;
-    });
-
-    if (!match) {
-      match = rear.find((r) => {
-        if (usedRearIds.has(r.id)) return false;
-        const rBrand = String(r.brandName ?? r.brand ?? "").toLowerCase().trim();
-        return rBrand === frontBrand;
+  const pairs: { front: Product; rear: Product; bundlePrice: number; frontSet2Price?: number; rearSet2Price?: number }[] = [];
+  for (const b of bundles) {
+    const bundlePrice = typeof b.bundle_price === "number" ? b.bundle_price : parseSetPrice(b.bundle_price);
+    const f = b.front?.sku ? frontBySku.get(b.front.sku) : undefined;
+    const r = b.rear?.sku ? rearBySku.get(b.rear.sku) : undefined;
+    if (f && r && bundlePrice != null) {
+      pairs.push({
+        front: f,
+        rear: r,
+        bundlePrice,
+        frontSet2Price: parseSetPrice(b.front?.set2_price),
+        rearSet2Price: parseSetPrice(b.rear?.set2_price),
       });
     }
-
-    if (match) {
-      const matchBrand = String(match.brandName ?? match.brand ?? "").toLowerCase().trim();
-      if (matchBrand === frontBrand) {
-        usedRearIds.add(match.id);
-        pairs.push({ front: f, rear: match });
-      }
-    }
-  });
-
+  }
   return pairs;
 }
 
@@ -312,7 +318,7 @@ export async function GET(req: NextRequest) {
       };
       if (sort) fullRearVars.sort = sort;
 
-      const [frontRes, rearRes] = await Promise.all([
+      const [frontRes, rearRes, bundlesRes] = await Promise.all([
         fetch(APP_CONFIG.magento.graphqlUrl, {
           method: "POST",
           headers: magentoHeaders(store),
@@ -325,10 +331,27 @@ export async function GET(req: NextRequest) {
           body: JSON.stringify({ query: CATEGORY_PAGE_QUERY, variables: fullRearVars }),
           next: { revalidate: 300 },
         }),
+        fetch(APP_CONFIG.magento.graphqlUrl, {
+          method: "POST",
+          headers: magentoHeaders(store),
+          body: JSON.stringify({
+            query: KLEVER_TYRE_BUNDLES_QUERY,
+            variables: {
+              width: frontWidth, height: frontHeight, rim: frontRim,
+              widthRear: rearWidth, heightRear: rearHeight, rimRear: rearRim,
+            },
+          }),
+          next: { revalidate: 300 },
+        }),
       ]);
 
       const frontJson = await frontRes.json().catch(() => null);
       const rearJson = await rearRes.json().catch(() => null);
+      const bundlesJson = await bundlesRes.json().catch(() => null);
+      if (bundlesJson?.errors?.length) {
+        console.warn("[category-page] GraphQL warnings (bundles):", (bundlesJson.errors as { message: string }[]).map(e => e.message));
+      }
+      const bundles: KleverTyreBundle[] = bundlesJson?.data?.kleverTyreBundles ?? [];
 
       if (!frontRes.ok && !frontJson?.data) {
         return NextResponse.json(
@@ -366,10 +389,10 @@ export async function GET(req: NextRequest) {
       const pageStart = (currentPage - 1) * pageSize;
       const productsPage = allFront.slice(pageStart, pageStart + pageSize);
 
-      /* Paired listing — this is the fix: pagination is derived from the
-         actual pair count, so the page control never promises more than
-         will render. */
-      const pairs = pairStaggered(allFront, allRear);
+      /* Paired listing — pairing AND pricing both come from kleverTyreBundles
+         now (hydrateBundlePairs), so pagination reflects the real bundle
+         count, not a client-side brand-matching guess. */
+      const pairs = hydrateBundlePairs(bundles, allFront, allRear);
       const pairedTotal = pairs.length;
       const pairedTotalPages = Math.max(1, Math.ceil(pairedTotal / pageSize));
       const pairedSlice = pairs.slice(pageStart, pageStart + pageSize);
@@ -388,6 +411,9 @@ export async function GET(req: NextRequest) {
             totalPages:  pairedTotalPages,
             products:    pairedSlice.map((p) => p.front),
             rearProducts: pairedSlice.map((p) => p.rear),
+            bundlePrices: pairedSlice.map((p) => p.bundlePrice),
+            frontSet2Prices: pairedSlice.map((p) => p.frontSet2Price),
+            rearSet2Prices: pairedSlice.map((p) => p.rearSet2Price),
           },
         },
         { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } }

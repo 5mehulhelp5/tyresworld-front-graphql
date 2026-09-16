@@ -126,7 +126,11 @@ export default function TyreListingCard({
   const { addItem } = useCart();
 
   const isBike = vehicleIcon === "bike" || isMotorcycleProduct(product);
-  const [qty, setQty] = useState(isBike ? 2 : 4);
+  const [qty, setQty] = useState(product.qtyOptions?.defaultQty ?? (isBike ? 2 : 4));
+  // Options come from Klever's kleverQtyOptions (per-SKU salable/max qty) —
+  // no fallback list is fabricated when the API returns none.
+  const qtyMenuOptions = Array.from(new Set([...(product.qtyOptions?.options ?? []), qty])).sort((a, b) => a - b);
+  const qtySelectable = qtyMenuOptions.length > 1;
   const [adding, setAdding] = useState(false);
   const [cartAdded, setCartAdded] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -150,7 +154,11 @@ export default function TyreListingCard({
      its real Magento stock_status (confirmed IN_STOCK for at least one),
      so this isn't a stock check for bikes, it's a fixed category rule
      (motorcycle fitting needs a staff consultation, unlike car tyres). */
-  const isOutOfStock = isBike || product.inStock === false || product.price <= 0;
+  const isOutOfStock =
+    isBike ||
+    product.inStock === false ||
+    product.price <= 0 ||
+    product.qtyOptions?.canAddToCart === false;
   const unitPrice = product.price > 0 ? product.price : 0;
 
   /* Real per-set price from Magento's own pricing/promo rules (kleverSetPricing)
@@ -352,6 +360,7 @@ export default function TyreListingCard({
                 <button
                   type="button"
                   className="qty-trigger"
+                  disabled={!qtySelectable}
                   onClick={() => setQtyOpen(o => !o)}
                   aria-haspopup="listbox"
                   aria-expanded={qtyOpen}
@@ -361,9 +370,9 @@ export default function TyreListingCard({
                   <ChevronDown size={13} className={`qty-caret ${qtyOpen ? "rotate-180" : ""}`} />
                 </button>
 
-                {qtyOpen && (
+                {qtyOpen && qtySelectable && (
                   <ul className="qty-menu" role="listbox" aria-label="Quantity">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                    {qtyMenuOptions.map((n) => (
                       <li key={n} role="option" aria-selected={n === qty}>
                         <button
                           type="button"

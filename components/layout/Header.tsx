@@ -350,7 +350,11 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
                                           <button
                                             type="button"
                                             onClick={() => updateQty(item.uid, item.quantity + 1)}
-                                            className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-200/70 transition-colors cursor-pointer"
+                                            disabled={
+                                              item.product.kleverQtyOptions?.max_qty != null &&
+                                              item.quantity >= item.product.kleverQtyOptions.max_qty
+                                            }
+                                            className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-200/70 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                                             aria-label="Increase quantity"
                                           >
                                             <Plus size={11} strokeWidth={2.5} />

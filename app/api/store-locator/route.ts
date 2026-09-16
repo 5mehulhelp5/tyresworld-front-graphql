@@ -41,7 +41,45 @@ type Branch = {
   whatsapp?: string;
   email?: string;
   external_link?: string;
+  /** Real per-weekday time slots (index 0 = Sunday..6 = Saturday, matching
+      JS Date.getDay()) parsed from Magento's own opening_hours field —
+      confirmed live: stores with a shortened/closed Friday have that at
+      index 5. An empty day array means genuinely closed, not missing data. */
+  openingHoursByDay: string[][];
 };
+
+function to12Hour(t: string): string {
+  const [hStr, mStr] = t.split(":");
+  const h = Number(hStr);
+  if (!Number.isFinite(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(h12).padStart(2, "0")}:${(mStr ?? "00").padStart(2, "0")} ${period}`;
+}
+
+/** Magento's opening_hours: a JSON string of 7 day-entries, each itself a
+    JSON string of [start,end] 24h pairs (or "[]"/"" when closed that day). */
+function parseOpeningHoursByDay(raw?: string | null): string[][] {
+  if (!raw) return [];
+  try {
+    const days: unknown = JSON.parse(raw);
+    if (!Array.isArray(days)) return [];
+    return days.map((d): string[] => {
+      if (typeof d !== "string" || !d.trim()) return [];
+      try {
+        const pairs: unknown = JSON.parse(d);
+        if (!Array.isArray(pairs)) return [];
+        return pairs
+          .filter((p): p is [string, string] => Array.isArray(p) && p.length === 2)
+          .map(([start, end]) => `${to12Hour(start)} - ${to12Hour(end)}`);
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
+  }
+}
 
 async function fetchBranches(locale: string): Promise<{ branches: Branch[]; cities: string[] }> {
   // 1. Try public store locator query (kleverStores) — carries phone, email, map links
@@ -69,6 +107,7 @@ async function fetchBranches(locale: string): Promise<{ branches: Branch[]; citi
           whatsapp,
           email: i.email?.trim() || undefined,
           external_link: i.external_link?.trim() || undefined,
+          openingHoursByDay: parseOpeningHoursByDay(i.opening_hours),
         };
       })
       .filter((b): b is Branch => b !== null);
@@ -78,7 +117,7 @@ async function fetchBranches(locale: string): Promise<{ branches: Branch[]; citi
   }
 
   // 2. Fallback to installer stores query
-  const r = await magentoFetch<{ kleverInstallerStores?: { stores_id?: number; name?: string; city?: string; address?: string; country?: string; latitude?: string | number; longitude?: string | number }[] | null }>(
+  const r = await magentoFetch<{ kleverInstallerStores?: { stores_id?: number; name?: string; city?: string; address?: string; country?: string; latitude?: string | number; longitude?: string | number; opening_hours?: string | null }[] | null }>(
     KLEVER_INSTALLER_STORES_QUERY,
     { deliveryMode: "outlet" },
     { store: locale, revalidate: 300 },
@@ -102,6 +141,7 @@ async function fetchBranches(locale: string): Promise<{ branches: Branch[]; citi
         city: i.city ?? "",
         lat,
         lng,
+        openingHoursByDay: parseOpeningHoursByDay(i.opening_hours),
       };
     })
     .filter((b): b is Branch => b !== null);

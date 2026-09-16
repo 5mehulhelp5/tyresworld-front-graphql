@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   MapPin,
   Search,
   Crosshair,
   ChevronRight,
-  ChevronDown,
   Navigation,
   Loader2,
   CheckCircle2,
@@ -60,14 +59,12 @@ export default function InstallerNetworkPage() {
 }
 
 function InstallerNetworkContent() {
-  const router = useRouter();
   const pathname = usePathname();
   const locale = pathname.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
 
   const [cities, setCities] = useState<string[]>([]);
   const [branches, setBranches] = useState<StoreLocation[]>([]);
-  const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedCity, setSelectedCity] = useState<string>(isAr ? "الكل" : "All");
@@ -75,32 +72,6 @@ function InstallerNetworkContent() {
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
-  const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
-  const [bookingError, setBookingError] = useState<string | null>(null);
-
-  const upcomingDates = useMemo(() => {
-    const dates = [];
-    const today = new Date();
-    for (let i = 0; i < 10; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const dateStr = d.toISOString().split("T")[0];
-      const label =
-        i === 0
-          ? isAr ? `اليوم (${dateStr})` : `Today (${dateStr})`
-          : i === 1
-          ? isAr ? `غداً (${dateStr})` : `Tomorrow (${dateStr})`
-          : d.toLocaleDateString(locale === "ar" ? "ar-AE" : "en-GB", {
-              weekday: "short",
-              day: "numeric",
-              month: "short",
-            });
-      dates.push({ value: dateStr, label });
-    }
-    return dates;
-  }, [locale, isAr]);
 
   useEffect(() => {
     let active = true;
@@ -115,7 +86,6 @@ function InstallerNetworkContent() {
             setBranches(data.branches);
             setSelectedStoreId(data.branches[0].id);
           }
-          if (data.timeSlots?.length) setTimeSlots(data.timeSlots);
         }
       } catch (err) {
         console.error("Failed to load store locator data:", err);
@@ -179,26 +149,6 @@ function InstallerNetworkContent() {
     return result;
   }, [branches, selectedCity, searchQuery, userCoords]);
 
-  const handleProceedCheckoutStore = (store: StoreLocation) => {
-    if (!selectedDate || !selectedTimeSlot) {
-      setBookingError(
-        isAr ? "يرجى اختيار التاريخ والوقت المفضلين." : "Please select a preferred date and time."
-      );
-      return;
-    }
-    setBookingError(null);
-    const installation = {
-      type: "install_outlet",
-      branch: store,
-      date: selectedDate,
-      time: selectedTimeSlot,
-    };
-    try {
-      localStorage.setItem("selected_installation", JSON.stringify(installation));
-    } catch {}
-    router.push(`/${locale}/checkout`);
-  };
-
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="bg-white min-h-screen pb-16">
       {/* ── Page Hero Title Banner with Radiant Red Glow, Dot Mesh & Exact Curved Wave ── */}
@@ -252,7 +202,7 @@ function InstallerNetworkContent() {
             </div>
             <div className="flex items-center gap-1.5">
               <Check size={13} className="text-[#25D366] stroke-[3]" />
-              <span>{isAr ? "حجز خلال خطوات بسيطة" : "Book in a Few Clicks"}</span>
+              <span>{isAr ? "تواصل معهم مباشرة عبر واتساب" : "Contact Installers Directly"}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Check size={13} className="text-[#25D366] stroke-[3]" />
@@ -389,7 +339,6 @@ function InstallerNetworkContent() {
             ) : (
               filteredStores.map((store) => {
                 const isSelected = selectedStoreId === store.id;
-                const isExpanded = expandedStoreId === store.id;
 
                 return (
                   <div
@@ -448,64 +397,7 @@ function InstallerNetworkContent() {
                               <span>{isAr ? "عرض على الخريطة" : "See on Map"}</span>
                             </button>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedStoreId(store.id);
-                              setExpandedStoreId(isExpanded ? null : store.id);
-                            }}
-                            className="bg-black hover:bg-[#ed1c24] text-white text-[11px] font-black uppercase tracking-wider py-1.5 px-3.5 rounded-md flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <span>{isAr ? "حجز" : "Book"}</span>
-                            {isExpanded ? <ChevronDown size={12} strokeWidth={3} /> : <ChevronRight size={12} strokeWidth={3} />}
-                          </button>
                         </div>
-
-                        {isExpanded && (
-                          <div className="mt-3.5 pt-3.5 border-t border-gray-100 bg-[#faf1f2] rounded-xl p-3.5 sm:p-4 border border-red-100 space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-bold text-gray-900 mb-1">{isAr ? "التاريخ المفضل" : "Preferred Date"}</label>
-                                <select
-                                  value={selectedDate}
-                                  onChange={(e) => setSelectedDate(e.target.value)}
-                                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#ed1c24] appearance-none cursor-pointer"
-                                >
-                                  <option value="">{isAr ? "-- اختر التاريخ --" : "-- Select Date --"}</option>
-                                  {upcomingDates.map((d) => (
-                                    <option key={d.value} value={d.value}>{d.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold text-gray-900 mb-1">{isAr ? "الوقت المفضل" : "Preferred Time"}</label>
-                                <select
-                                  value={selectedTimeSlot}
-                                  onChange={(e) => setSelectedTimeSlot(e.target.value)}
-                                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#ed1c24] appearance-none cursor-pointer"
-                                >
-                                  <option value="">{isAr ? "-- اختر الوقت --" : "-- Select Time --"}</option>
-                                  {timeSlots.map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-
-                            {bookingError && <p className="text-[11px] font-semibold text-[#ed1c24]">{bookingError}</p>}
-                            <div className="flex justify-end pt-1">
-                              <button
-                                type="button"
-                                onClick={() => handleProceedCheckoutStore(store)}
-                                className="bg-[#ed1c24] hover:bg-black text-white text-xs font-bold tracking-wide py-2 px-5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                              >
-                                <span>{isAr ? "المتابعة إلى الدفع" : "Proceed to Checkout"}</span>
-                                <span>→</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -518,10 +410,7 @@ function InstallerNetworkContent() {
             <StoreLocatorMap
               stores={filteredStores}
               selectedStoreId={selectedStoreId}
-              onSelectStore={(s) => {
-                setSelectedStoreId(s.id);
-                setExpandedStoreId(s.id);
-              }}
+              onSelectStore={(s) => setSelectedStoreId(s.id)}
               locale={locale}
             />
           </div>

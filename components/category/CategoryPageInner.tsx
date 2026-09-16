@@ -194,6 +194,9 @@ export default function CategoryPageInner({
     totalPages: number;
     products: Product[];
     rearProducts: Product[];
+    bundlePrices: (number | undefined)[];
+    frontSet2Prices: (number | undefined)[];
+    rearSet2Prices: (number | undefined)[];
   } | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -275,7 +278,7 @@ export default function CategoryPageInner({
     if (requestUrlRef.current === url) return;
     requestUrlRef.current = url;
 
-    setLoading(true); setCatLoading(true); setApiError(null);
+    setLoading(true); setCatLoading(true); setApiError(null); setFiltersLoading(true);
 
     fetch(url, { cache: "no-store" })
       .then(async (r) => {
@@ -297,6 +300,9 @@ export default function CategoryPageInner({
           totalPages?: number;
           products?: Product[];
           rearProducts?: Product[];
+          bundlePrices?: (number | undefined)[];
+          frontSet2Prices?: (number | undefined)[];
+          rearSet2Prices?: (number | undefined)[];
         } | null;
         filters?: FilterGroup[];
       }) => {
@@ -309,24 +315,41 @@ export default function CategoryPageInner({
         setTotalPages(j.totalPages ?? 1);
 
         if (j.staggered) {
-          let pairs: { front: Product; rear: Product }[] = (j.staggered.products ?? []).map(
-            (front: Product, i: number) => ({ front, rear: j.staggered?.rearProducts?.[i] as Product }),
+          let pairs: {
+            front: Product; rear: Product; bundlePrice: number | undefined;
+            frontSet2Price: number | undefined; rearSet2Price: number | undefined;
+          }[] = (j.staggered.products ?? []).map(
+            (front: Product, i: number) => ({
+              front,
+              rear: j.staggered?.rearProducts?.[i] as Product,
+              bundlePrice: j.staggered?.bundlePrices?.[i],
+              frontSet2Price: j.staggered?.frontSet2Prices?.[i],
+              rearSet2Price: j.staggered?.rearSet2Prices?.[i],
+            }),
           );
-          if (sort === "high-to-low") pairs = [...pairs].sort((a, b) => (b.front.price ?? 0) - (a.front.price ?? 0));
-          else if (sort === "low-to-high") pairs = [...pairs].sort((a, b) => (a.front.price ?? 0) - (b.front.price ?? 0));
+          // Sort by the real bundle price (kleverTyreBundles) — the actual
+          // "Set of 4" number shown on the card, not just the front tyre's
+          // own unit price.
+          if (sort === "high-to-low") pairs = [...pairs].sort((a, b) => (b.bundlePrice ?? 0) - (a.bundlePrice ?? 0));
+          else if (sort === "low-to-high") pairs = [...pairs].sort((a, b) => (a.bundlePrice ?? 0) - (b.bundlePrice ?? 0));
           setStaggered({
             total: j.staggered.total ?? 0,
             totalPages: j.staggered.totalPages ?? 1,
             products: pairs.map((p) => p.front),
             rearProducts: pairs.map((p) => p.rear),
+            bundlePrices: pairs.map((p) => p.bundlePrice),
+            frontSet2Prices: pairs.map((p) => p.frontSet2Price),
+            rearSet2Prices: pairs.map((p) => p.rearSet2Price),
           });
         } else {
           setStaggered(null);
         }
         if (Array.isArray(j.filters)) {
           setFilterGroups(j.filters);
-          setFiltersLoading(false);
+        } else {
+          setFilterGroups([]);
         }
+        setFiltersLoading(false);
         setLoading(false); setCatLoading(false);
       })
       .catch((err: Error) => {
@@ -335,6 +358,8 @@ export default function CategoryPageInner({
         setApiError(err.message || "Failed to load products");
         setLoading(false);
         setCatLoading(false);
+        setFiltersLoading(false);
+        setFilterGroups([]);
       });
   }, [urlKey, sort, page, store, selected, searchParams]);
 
@@ -418,6 +443,10 @@ export default function CategoryPageInner({
   const sidebarFilterCount = Object.entries(selected)
     .filter(([k]) => !SYSTEM_PARAMS.has(k) && !SIZE_KEYS.has(k))
     .reduce((s, [, v]) => s + v.length, 0);
+
+  const hasVisibleFilters = filterGroups.some(
+    (f) => !SIZE_KEYS.has(f.code.toLowerCase()) && f.options && f.options.length > 0
+  );
 
   const hasActiveSizeFilter = Array.from(SIZE_KEYS).some(
     (k) => (selected[k]?.length ?? 0) > 0
@@ -579,17 +608,19 @@ export default function CategoryPageInner({
       )}
 
       {/* ── Filter drawer ──────────────────────────────────────────── */}
-      <FilterPanel
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        filters={filterGroups}
-        loading={filtersLoading}
-        selected={selected}
-        onChange={handleFilterChange}
-        onClearAll={clearAllFilters}
-        dir={dir}
-        urlKey={urlKey}
-      />
+      {(hasVisibleFilters || sidebarFilterCount > 0) && (
+        <FilterPanel
+          open={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          filters={filterGroups}
+          loading={filtersLoading}
+          selected={selected}
+          onChange={handleFilterChange}
+          onClearAll={clearAllFilters}
+          dir={dir}
+          urlKey={urlKey}
+        />
+      )}
 
       {/* ── Product grid ───────────────────────────────────────────── */}
       <div className="bg-gray-50 min-h-[600px]">
@@ -728,29 +759,31 @@ export default function CategoryPageInner({
           {/* ── Sort & Filter Controls (Matches reference screenshot) ─ */}
           <div className="flex items-center justify-end gap-2.5 mb-5">
             <SortBar value={sort} onChange={setSort} isAr={isAr} />
-            <button
-              onClick={() => setFilterOpen(true)}
-              className="relative w-10 h-10 flex items-center justify-center bg-[#ed1c24] hover:bg-[#c6181d] text-white rounded-xl transition-colors shrink-0 cursor-pointer shadow-2xs"
-              aria-label={isAr ? "تصفية" : "Filter"}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {(hasVisibleFilters || sidebarFilterCount > 0) && (
+              <button
+                onClick={() => setFilterOpen(true)}
+                className="relative w-10 h-10 flex items-center justify-center bg-[#ed1c24] hover:bg-[#c6181d] text-white rounded-xl transition-colors shrink-0 cursor-pointer shadow-2xs"
+                aria-label={isAr ? "تصفية" : "Filter"}
               >
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              {sidebarFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black text-white text-[9px] font-black flex items-center justify-center">
-                  {sidebarFilterCount}
-                </span>
-              )}
-            </button>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                {sidebarFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black text-white text-[9px] font-black flex items-center justify-center">
+                    {sidebarFilterCount}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
 
           {isLoading ? (
@@ -784,6 +817,9 @@ export default function CategoryPageInner({
                       key={`${front.id}-${staggered.rearProducts[idx]?.id}-${idx}`}
                       frontProduct={front}
                       rearProduct={staggered.rearProducts[idx]}
+                      bundlePrice={staggered.bundlePrices[idx]}
+                      frontSet2Price={staggered.frontSet2Prices[idx]}
+                      rearSet2Price={staggered.rearSet2Prices[idx]}
                       locale={locale}
                     />
                   ))}

@@ -1,15 +1,27 @@
 "use client";
 
-import React from "react";
+import { useEffect, useState } from "react";
+import type { KleverHomeSteps } from "@/lib/services/homepage.service";
 
 interface HowItWorksProps {
   locale?: string;
 }
 
+/* kleverHomepage.how_it_works.steps carries number/title/description only —
+   no image field — so these local icon images (matched by step number)
+   still come from local assets, not fabricated business data. */
+const STEP_IMAGES: Record<string, string> = {
+  "01": "/media/images/find-your-tyres.webp",
+  "02": "/media/images/set-up-installation.webp",
+  "03": "/media/images/secure-payment-quick-install.webp",
+  "04": "/media/images/set-up-installation.webp",
+};
+
 export default function HowItWorks({ locale = "en" }: HowItWorksProps) {
   const isAr = locale === "ar";
+  const [stepsData, setStepsData] = useState<KleverHomeSteps | null>(null);
 
-  const steps = [
+  const defaultSteps = [
     {
       number: "01",
       img: "/media/images/find-your-tyres.webp",
@@ -39,6 +51,24 @@ export default function HowItWorks({ locale = "en" }: HowItWorksProps) {
     },
   ];
 
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/homepage?locale=${locale}`)
+      .then((res) => res.json())
+      .then((data) => { if (active) setStepsData(data?.howItWorks ?? null); })
+      .catch(() => { /* use defaults */ });
+    return () => { active = false; };
+  }, [locale]);
+
+  const steps = (stepsData?.steps && stepsData.steps.length > 0)
+    ? stepsData.steps.map((s, idx) => ({
+        number: s.number ?? `0${idx + 1}`,
+        img: STEP_IMAGES[s.number ?? ""] ?? STEP_IMAGES[`0${(idx % 3) + 1}`],
+        title: s.title || defaultSteps[idx % defaultSteps.length]?.title || `Step ${idx + 1}`,
+        desc: s.description || defaultSteps[idx % defaultSteps.length]?.desc || "",
+      }))
+    : defaultSteps;
+
   return (
     <section className="section section-padding how-works bg-black py-16 lg:py-20">
       <div className="container custom-width max-w-7xl mx-auto px-4">
@@ -52,7 +82,7 @@ export default function HowItWorks({ locale = "en" }: HowItWorksProps) {
         </div>
 
         <div className="steps">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 sm:gap-8 lg:gap-10">
+          <div className={`grid grid-cols-2 ${steps.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-x-6 gap-y-10 sm:gap-8 lg:gap-10`}>
             {steps.map((step, idx) => (
               <div
                 key={step.number}
@@ -65,7 +95,7 @@ export default function HowItWorks({ locale = "en" }: HowItWorksProps) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={step.img}
-                    alt={step.alt}
+                    alt={step.title}
                     className="w-full h-full object-cover rounded-full border-[5px] border-[#232323] transition-all duration-300 group-hover:border-[#ed1c24] group-hover:shadow-[0_0_0_5px_rgba(237,28,36,0.25)]"
                     loading="lazy"
                   />

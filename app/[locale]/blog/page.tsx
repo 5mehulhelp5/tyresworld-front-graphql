@@ -1,27 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 import { getBlogPosts, getBlogCategories, excerptFromHtml } from "@/lib/services/blog.service";
 import { storeCode } from "@/lib/i18n";
+import BlogSearchBar from "@/components/blog/BlogSearchBar";
 
 /**
- * Real blog listing — Magento's Klever module (kleverBlogPosts /
- * kleverBlogCategories). Previously there was no /blog route at all; every
- * link to it (the homepage teaser, the footer) was dead.
+ * Real blog listing — Magento's Klever module (kleverBlogPosts / kleverBlogCategories)
  */
 
 const PAGE_SIZE = 12;
 
 export async function generateMetadata({
+  params,
   searchParams,
 }: {
   params: { locale: string };
-  searchParams: { category?: string };
+  searchParams: { category?: string; search?: string };
 }): Promise<Metadata> {
+  const isAr = params.locale === "ar";
+  const title = isAr
+    ? "المدونة – نصائح الإطارات وصيانة السيارات | تايرز وورلد"
+    : "Explore Our Blog – Tyre Advice & Car Maintenance Tips | TyresWorld UAE";
   return {
-    title: "Blog",
-    description: "Tyre buying advice, car maintenance tips, and driving guides for the UAE.",
+    title,
+    description: isAr
+      ? "نصائح لشراء الإطارات، صيانة السيارات، وإرشادات القيادة في الإمارات العربية المتحدة."
+      : "Tyre buying advice, car maintenance tips, and driving guides for the UAE.",
   };
 }
 
@@ -30,7 +35,7 @@ export default async function BlogPage({
   searchParams,
 }: {
   params: { locale: string };
-  searchParams: { category?: string; page?: string };
+  searchParams: { category?: string; page?: string; search?: string };
 }) {
   const { locale } = params;
   if (locale !== "en" && locale !== "ar") notFound();
@@ -39,9 +44,16 @@ export default async function BlogPage({
 
   const currentPage = Math.max(1, Number(searchParams.page ?? 1));
   const categoryUrlKey = searchParams.category;
+  const searchQuery = searchParams.search?.trim();
 
   const [{ posts, total }, categories] = await Promise.all([
-    getBlogPosts({ categoryUrlKey, pageSize: PAGE_SIZE, currentPage, store }),
+    getBlogPosts({
+      categoryUrlKey,
+      search: searchQuery,
+      pageSize: PAGE_SIZE,
+      currentPage,
+      store,
+    }),
     getBlogCategories(store),
   ]);
 
@@ -49,66 +61,120 @@ export default async function BlogPage({
   const activeCategory = categories?.find((c) => c.url_key === categoryUrlKey);
 
   return (
-    <div className="so-page">
-      <div className="so-hero">
-        <div className="so-container">
-          <nav className="so-crumbs" aria-label="Breadcrumb">
-            <Link href={`/${locale}`}>{isAr ? "الرئيسية" : "Home"}</Link>
-            <ChevronRight size={13} aria-hidden="true" />
-            <span aria-current="page">{isAr ? "المدونة" : "Blog"}</span>
+    <div className="bg-white min-h-screen" dir={isAr ? "rtl" : "ltr"}>
+      {/* ── Top Hero Banner with Black Background (Matching Screenshot) ── */}
+      <div className="relative w-full py-10 sm:py-12 md:py-14 bg-black flex items-center justify-center px-4">
+        <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-[32px] font-black text-white uppercase tracking-wider text-center max-w-5xl leading-tight font-sans">
+          {isAr
+            ? "استكشف مدونتنا – نصائح الإطارات وصيانة السيارات"
+            : "EXPLORE OUR BLOG – TYRE ADVICE & CAR MAINTENANCE TIPS"}
+        </h1>
+      </div>
+
+      {/* ── Breadcrumb Bar (Matching Screenshot) ── */}
+      <div className="bg-[#f0f0f0] border-b border-gray-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
+          <nav className="flex items-center gap-2 text-xs font-semibold text-gray-500" aria-label="Breadcrumb">
+            <Link href={`/${locale}`} className="hover:text-black transition-colors">
+              {isAr ? "الرئيسية" : "Home"}
+            </Link>
+            <span className="text-gray-400 font-normal">&gt;</span>
+            <span className="text-gray-900 font-bold" aria-current="page">
+              {isAr ? "المدونة" : "Blog"}
+            </span>
           </nav>
-          <h1 className="so-h1">
-            {activeCategory?.title ?? (isAr ? "المدونة" : "Blog")}
-          </h1>
         </div>
       </div>
 
-      <div className="so-container so-body">
-        {/* ── Real categories (kleverBlogCategories) ─────────────── */}
+      {/* ── Main Content Area ── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {/* ── Search Bar (Matching Screenshot) ── */}
+        <div className="max-w-4xl mx-auto mb-8 sm:mb-10">
+          <BlogSearchBar
+            locale={locale}
+            initialQuery={searchQuery}
+            placeholder={isAr ? "ابحث في مقالات المدونة..." : "Search blog posts..."}
+          />
+        </div>
+
+        {/* ── Categories Filter Pills ── */}
         {categories && categories.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-8">
+          <div className="flex items-center justify-center flex-wrap gap-2 sm:gap-2.5 mb-10">
             <Link
-              href={`/${locale}/blog`}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-colors ${
+              href={`/${locale}/blog${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 !categoryUrlKey
-                  ? "bg-[#ed1c24] text-white"
+                  ? "bg-[#ed1c24] text-white shadow-sm"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               {isAr ? "الكل" : "All"}
             </Link>
-            {categories.map((c) => (
-              <Link
-                key={c.category_id}
-                href={`/${locale}/blog?category=${c.url_key}`}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-colors ${
-                  categoryUrlKey === c.url_key
-                    ? "bg-[#ed1c24] text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {c.title}
-              </Link>
-            ))}
+            {categories.map((c) => {
+              const qs = new URLSearchParams();
+              qs.set("category", c.url_key ?? "");
+              if (searchQuery) qs.set("search", searchQuery);
+              return (
+                <Link
+                  key={c.category_id}
+                  href={`/${locale}/blog?${qs.toString()}`}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    categoryUrlKey === c.url_key
+                      ? "bg-[#ed1c24] text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {c.title}
+                </Link>
+              );
+            })}
           </div>
         )}
 
-        {/* ── Posts grid ──────────────────────────────────────────── */}
-        {posts.length === 0 ? (
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center">
-            <p className="text-gray-500 text-sm font-bold">
-              {isAr ? "لا توجد مقالات." : "No posts found."}
+        {/* ── Active Search Info ── */}
+        {searchQuery && (
+          <div className="flex items-center justify-between mb-8 pb-3 border-b border-gray-100">
+            <p className="text-sm font-bold text-gray-800">
+              {isAr ? `نتائج البحث عن: "${searchQuery}"` : `Search results for: "${searchQuery}"`}{" "}
+              <span className="text-gray-500 font-normal">({total})</span>
             </p>
+            <Link
+              href={`/${locale}/blog${categoryUrlKey ? `?category=${categoryUrlKey}` : ""}`}
+              className="text-xs font-bold text-[#ed1c24] hover:underline"
+            >
+              {isAr ? "مسح البحث" : "Clear search"}
+            </Link>
+          </div>
+        )}
+
+        {/* ── Blog Posts Grid (Matching Screenshot) ── */}
+        {posts.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-12 text-center max-w-lg mx-auto my-8">
+            <p className="text-gray-800 text-base font-bold mb-2">
+              {isAr ? "لا توجد مقالات مطابقة." : "No posts found."}
+            </p>
+            <p className="text-gray-500 text-xs mb-6">
+              {isAr
+                ? "جرب البحث بكلمات أخرى أو اختر قسماً مختلفاً."
+                : "Try searching with different keywords or select a different category."}
+            </p>
+            <Link
+              href={`/${locale}/blog`}
+              className="inline-block px-5 py-2.5 bg-[#ed1c24] text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-red-700 transition-colors"
+            >
+              {isAr ? "عرض كل المقالات" : "View All Posts"}
+            </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {posts.map((post) => {
               const href = `/${locale}/blog/${post.url_key}`;
               const date = post.published_at ?? post.created_at;
+
               return (
-                <div
+                <article
                   key={post.post_id}
-                  className="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 group"
+                  className="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
                 >
                   <Link href={href} className="block relative w-full aspect-[16/10] overflow-hidden bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -119,47 +185,61 @@ export default async function BlogPage({
                       loading="lazy"
                     />
                   </Link>
-                  <div className="flex flex-col flex-1 p-5">
+
+                  <div className="flex flex-col flex-1 p-5 sm:p-6">
                     {date && (
-                      <span className="text-xs font-semibold text-gray-500 mb-2">
+                      <time className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 block">
                         {new Date(date.replace(" ", "T")).toLocaleDateString(
                           isAr ? "ar-AE" : "en-US",
                           { month: "short", day: "numeric", year: "numeric" },
                         )}
-                      </span>
+                      </time>
                     )}
-                    <h2 className="text-sm sm:text-[15px] font-bold text-black leading-snug mb-2.5 line-clamp-2">
-                      <Link href={href} className="text-black group-hover:text-[#ed1c24] transition-colors">
+
+                    <h2 className="text-base sm:text-lg font-black text-gray-950 leading-snug mb-2.5 line-clamp-2">
+                      <Link href={href} className="text-gray-950 group-hover:text-[#ed1c24] transition-colors">
                         {post.title}
                       </Link>
                     </h2>
+
                     {post.short_content && (
-                      <p className="text-xs sm:text-[13px] text-gray-600 leading-relaxed line-clamp-3 m-0">
+                      <p className="text-xs sm:text-sm text-gray-600 leading-relaxed line-clamp-3 mb-4">
                         {excerptFromHtml(post.short_content)}
                       </p>
                     )}
+
+                    <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
+                      <Link
+                        href={href}
+                        className="text-xs font-black uppercase tracking-wider text-[#ed1c24] group-hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>{isAr ? "اقرأ المزيد" : "Read More"}</span>
+                        <span className="text-sm rtl:rotate-180">→</span>
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
 
-        {/* ── Pagination ──────────────────────────────────────────── */}
+        {/* ── Pagination ── */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-10">
+          <div className="flex items-center justify-center gap-2 mt-12">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
               const qs = new URLSearchParams();
               if (categoryUrlKey) qs.set("category", categoryUrlKey);
+              if (searchQuery) qs.set("search", searchQuery);
               if (p > 1) qs.set("page", String(p));
               const href = `/${locale}/blog${qs.toString() ? `?${qs}` : ""}`;
               return (
                 <Link
                   key={p}
                   href={href}
-                  className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${
                     p === currentPage
-                      ? "bg-[#ed1c24] text-white"
+                      ? "bg-[#ed1c24] text-white shadow-sm"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >

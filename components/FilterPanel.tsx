@@ -165,7 +165,22 @@ export default function FilterPanel({
     "haight_rear", "height_rear", "rear_height", "rheight",
     "rim_rear", "rear_rim", "rrim",
   ]);
-  const visibleFilters = filters.filter((f) => !SIZE_FILTER_CODES.has(f.code.toLowerCase()));
+  const visibleFilters = filters.filter(
+    (f) => !SIZE_FILTER_CODES.has(f.code.toLowerCase()) && f.options && f.options.length > 0
+  );
+
+  /* Check only non-size filter selections */
+  const activeFilterEntries = Object.entries(selected).filter(
+    ([code, vals]) => !SIZE_FILTER_CODES.has(code.toLowerCase()) && vals.length > 0
+  );
+  const hasAnySelected = activeFilterEntries.length > 0;
+
+  /* If there are no filters available from backend and nothing selected, do not open/render */
+  useEffect(() => {
+    if (open && !loading && visibleFilters.length === 0 && !hasAnySelected) {
+      onClose();
+    }
+  }, [open, loading, visibleFilters.length, hasAnySelected, onClose]);
 
   /* Close on Escape key */
   useEffect(() => {
@@ -179,7 +194,9 @@ export default function FilterPanel({
 
   useScrollLock(open);
 
-  const hasAnySelected = Object.values(selected).some(v => v.length > 0);
+  if (!open || (!loading && visibleFilters.length === 0 && !hasAnySelected)) {
+    return null;
+  }
 
   return (
     <>
@@ -218,20 +235,46 @@ export default function FilterPanel({
 
         {/* Clear all filters if selected */}
         {hasAnySelected && (
-          <div className="px-5 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
-            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-              Active Filters
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                if (onClearAll) { onClearAll(); return; }
-                Object.keys(selected).forEach(code => onChange(code, []));
-              }}
-              className="text-[11px] font-bold text-[#ed1c24] hover:underline uppercase tracking-wide cursor-pointer"
-            >
-              Clear All
-            </button>
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                {dir === "rtl" ? "الفلاتر النشطة" : "Active Filters"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onClearAll) { onClearAll(); return; }
+                  Object.keys(selected).forEach(code => onChange(code, []));
+                }}
+                className="text-[11px] font-bold text-[#ed1c24] hover:underline uppercase tracking-wide cursor-pointer"
+              >
+                {dir === "rtl" ? "مسح الكل" : "Clear All"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-[90px] overflow-y-auto">
+              {activeFilterEntries.map(([code, vals]) =>
+                vals.map((val) => {
+                  const group = filters.find((g) => g.code === code);
+                  const opt = group?.options.find((o) => o.value === val || o.label.toLowerCase() === val.toLowerCase());
+                  const label = opt?.label ?? val;
+                  return (
+                    <span
+                      key={`${code}-${val}`}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-800 shadow-2xs"
+                    >
+                      <span>{label}</span>
+                      <button
+                        type="button"
+                        onClick={() => onChange(code, vals.filter((v) => v !== val))}
+                        className="text-gray-400 hover:text-[#ed1c24] transition-colors cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 
@@ -244,10 +287,6 @@ export default function FilterPanel({
                   <div className="h-4 bg-gray-200 rounded w-28 mb-2" />
                 </div>
               ))}
-            </div>
-          ) : visibleFilters.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-400 text-sm m-0">No filters available.</p>
             </div>
           ) : (
             visibleFilters.map((group) => (

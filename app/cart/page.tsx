@@ -10,6 +10,7 @@ import {
   Trash2,
   ChevronDown,
   Check,
+  Loader2,
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
@@ -19,11 +20,13 @@ import ProductImage from "@/components/ProductImage";
 function CartQtyDropdown({
   uid,
   quantity,
+  qtyOptions,
   onUpdate,
   disabled,
 }: {
   uid: string;
   quantity: number;
+  qtyOptions?: number[] | null;
   onUpdate: (uid: string, qty: number) => void;
   disabled?: boolean;
 }) {
@@ -41,26 +44,34 @@ function CartQtyDropdown({
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const qtyOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20];
-  const options = Array.from(new Set([...qtyOptions, quantity])).sort((a, b) => a - b);
+  // Use kleverQtyOptions when available with multiple values;
+  // otherwise fallback to 1..8 range so quantity is always editable.
+  const defaultOptions = [1, 2, 3, 4, 5, 6, 7, 8];
+  const baseOptions = qtyOptions && qtyOptions.length > 1 ? qtyOptions : defaultOptions;
+  const options = Array.from(new Set([...baseOptions, quantity])).sort((a, b) => a - b);
+  const selectable = options.length > 1;
 
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
-        disabled={disabled}
+        disabled={disabled || !selectable}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Quantity: ${quantity}`}
-        className="flex items-center justify-between gap-2 min-w-[58px] sm:min-w-[64px] h-9 px-3 bg-[#f8f9fa] hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-lg text-gray-950 font-bold text-xs sm:text-sm cursor-pointer transition-all shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center justify-between gap-2 min-w-[58px] sm:min-w-[64px] h-9 px-3 bg-[#f8f9fa] hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-lg text-gray-950 font-bold text-xs sm:text-sm cursor-pointer transition-all shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <span>{quantity}</span>
-        <ChevronDown
-          size={14}
-          strokeWidth={2.5}
-          className={`text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        />
+        {disabled ? (
+          <Loader2 size={13} className="animate-spin text-gray-400" />
+        ) : (
+          <ChevronDown
+            size={14}
+            strokeWidth={2.5}
+            className={`text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          />
+        )}
       </button>
 
       {open && (
@@ -116,6 +127,23 @@ export default function CartPage() {
   const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [updatingUid, setUpdatingUid] = useState<string | null>(null);
+  const [cartError, setCartError] = useState<string | null>(null);
+
+  const handleUpdateQty = async (uid: string, qty: number) => {
+    setUpdatingUid(uid);
+    setCartError(null);
+    try {
+      const res = await updateQty(uid, qty);
+      if (res?.error) {
+        setCartError(res.error);
+      }
+    } catch {
+      setCartError(isAr ? "فشل تحديث الكمية" : "Failed to update quantity.");
+    } finally {
+      setUpdatingUid(null);
+    }
+  };
 
   const activeCoupon = cart?.applied_coupons?.[0]?.code ?? null;
   const discounts = cart?.prices?.discounts ?? [];
@@ -299,6 +327,20 @@ export default function CartPage() {
         >
           {/* ════ LEFT COLUMN: CART ITEMS ════ */}
           <div className="space-y-3">
+            {/* Error banner if qty update fails (e.g. out of stock or Magento limitation) */}
+            {cartError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-[#ed1c24] flex items-center justify-between animate-in fade-in duration-200">
+                <span>{cartError}</span>
+                <button
+                  type="button"
+                  onClick={() => setCartError(null)}
+                  className="text-gray-400 hover:text-gray-700 ml-2 font-black cursor-pointer px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* ── Table Header ── */}
             <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-x-6 px-4 py-3 bg-gray-100 border border-gray-200/70 rounded-xl text-[11px] font-bold uppercase tracking-wider text-gray-500 select-none">
               <span>{isAr ? "المنتج" : "Item"}</span>
@@ -375,7 +417,9 @@ export default function CartPage() {
                         <CartQtyDropdown
                           uid={item.uid}
                           quantity={item.quantity}
-                          onUpdate={updateQty}
+                          qtyOptions={item.product.kleverQtyOptions?.options}
+                          onUpdate={handleUpdateQty}
+                          disabled={updatingUid === item.uid}
                         />
                       </div>
 
@@ -406,7 +450,13 @@ export default function CartPage() {
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className="text-xs text-gray-500 tabular-nums">{fmt(unitPrice)}</span>
                           <span className="text-xs text-gray-300">×</span>
-                          <CartQtyDropdown uid={item.uid} quantity={item.quantity} onUpdate={updateQty} />
+                          <CartQtyDropdown
+                            uid={item.uid}
+                            quantity={item.quantity}
+                            qtyOptions={item.product.kleverQtyOptions?.options}
+                            onUpdate={handleUpdateQty}
+                            disabled={updatingUid === item.uid}
+                          />
                           <span className="text-xs text-gray-300">=</span>
                           <span className="text-xs font-black text-gray-950 tabular-nums">{fmt(rowTotal)}</span>
                         </div>
@@ -492,9 +542,11 @@ export default function CartPage() {
                 </span>
               </div>
 
-              {/* Checkout CTA Button */}
+              {/* Checkout CTA Button — routes through delivery/installer
+                  selection first (storelocator), which then continues to
+                  the existing checkout flow. */}
               <Link
-                href={`/${locale}/checkout`}
+                href={`/${locale}/storelocator/ref=cart`}
                 className="btn-cta w-full text-sm py-4 rounded-xl shadow-md"
               >
                 <span>{isAr ? "متابعة الدفع" : "PROCEED TO CHECKOUT"}</span>

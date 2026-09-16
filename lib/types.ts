@@ -52,6 +52,15 @@ export interface ServerCartItem {
     sku: string;
     url_key?: string;
     thumbnail?: { url?: string | null; label?: string | null } | null;
+    kleverQtyOptions?: {
+      salable_qty?: number | null;
+      max_qty?: number | null;
+      default_qty?: number | null;
+      options?: number[] | null;
+      can_add_to_cart?: boolean | null;
+      parts_category?: string | null;
+      unit_price?: number | null;
+    } | null;
   };
 }
 

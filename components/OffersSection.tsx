@@ -1,40 +1,17 @@
 "use client";
 
-import React from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
+import type { KleverHomeOffers } from "@/lib/services/homepage.service";
 
-const FLASH_SALE_SLIDES = [
+const DEFAULT_OFFERS_SLIDES = [
   {
-    id: "matrax-3plus1",
-    title: "Matrax 3+1 Free Tyre Offers in UAE",
-    image: "/offers/buy3-get1-free-matrax-tyres-uae.webp",
-    href: "/tyres?mgs_brand=Matrax&offers=Buy+3+Get+1+Free",
-  },
-  {
-    id: "vredestein-3plus1",
-    title: "Buy 3 Vredestein Tyres & Get 1 Free",
-    image: "/offers/buy3-get1-free-vredestein-tyres-uae.webp",
-    href: "/tyres?mgs_brand=Vredestein&offers=Buy+3+Get+1+Free",
-  },
-  {
-    id: "free-wheel-alignment",
-    title: "Free Wheel Alignment Offer on Tyres",
-    image: "/offers/free-wheel-alignment-offer-on-tyres-uae_1.webp",
-    href: "/tyres?offers=Free+Wheel+Alignment",
-  },
-  {
-    id: "installments",
-    title: "Shop Tyres Online & Pay in Easy Installments",
-    image: "/offers/buy-tyres-pay-in-easy-installments-uae.webp",
-    href: "/tyres",
-  },
-  {
-    id: "continental-3plus1",
-    title: "Continental 3+1 Free Special Offers",
+    id: "buy-3-get-1",
+    title: "Buy 3 Tyres Get 1 Free on Continental",
     image: "/offers/buy-3-get-1-free-continental.webp",
     href: "/tyres?mgs_brand=Continental&offers=Buy+3+Get+1+Free",
   },
@@ -49,7 +26,52 @@ const FLASH_SALE_SLIDES = [
 export default function OffersSection() {
   const pathname = usePathname();
   const locale = pathname?.split("/")[1] || "en";
+  const isAr = locale === "ar";
   const reducedMotion = usePrefersReducedMotion();
+
+  const [offersData, setOffersData] = useState<KleverHomeOffers | null>(null);
+
+  /* Real promo banners/heading from Magento's kleverHomepage (Klever
+     module) — English-only at the source, so both locales render this
+     same content. */
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/homepage?locale=${locale}`)
+      .then((res) => res.json())
+      .then((data) => { if (active) setOffersData(data?.offers ?? null); })
+      .catch(() => { /* use defaults */ });
+    return () => { active = false; };
+  }, [locale]);
+
+  const dynamicSlides = (offersData?.banners ?? []).map((b, i) => {
+    // Strip origin if absolute URL to keep SPA navigation
+    let href = b.url ?? "/tyres";
+    try {
+      if (href.startsWith("http://") || href.startsWith("https://")) {
+        const u = new URL(href);
+        href = u.pathname + u.search + u.hash;
+      }
+    } catch {
+      // ignore
+    }
+    // Ensure locale prefix if not present
+    if (!href.startsWith(`/${locale}`)) {
+      href = `/${locale}${href.startsWith("/") ? "" : "/"}${href}`;
+    }
+    return {
+      id: `offer-banner-${i}`,
+      title: b.title ?? "Exclusive Offer",
+      image: b.image ?? "",
+      href,
+    };
+  }).filter((s) => Boolean(s.image));
+
+  const slides = dynamicSlides.length > 0
+    ? dynamicSlides
+    : DEFAULT_OFFERS_SLIDES.map((s) => ({
+        ...s,
+        href: s.href.startsWith(`/${locale}`) ? s.href : `/${locale}${s.href}`,
+      }));
 
   return (
     <section className="bg-white pt-6 sm:pt-8 pb-10 sm:pb-12">
@@ -58,11 +80,14 @@ export default function OffersSection() {
         <div className="mb-8">
           <div className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] text-[#ed1c24] mb-1.5 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#ed1c24]" />
-            FLASH SALE
+            {isAr ? "تخفيضات كبرى" : "FLASH SALE"}
           </div>
 
-          <h2 className="text-2xl sm:text-3xl lg:text-[32px] font-black tracking-tight text-gray-950 font-sans">
-            Limited Time Offers
+          <h2 className="text-2xl sm:text-3xl lg:text-[32px] font-black tracking-tight text-gray-950 font-sans uppercase">
+            {isAr ? "عروض لفترة " : "LIMITED TIME "}{" "}
+            <span className="text-[#ed1c24]">
+              {isAr ? "محدودة" : "OFFERS"}
+            </span>
           </h2>
         </div>
 
@@ -87,7 +112,7 @@ export default function OffersSection() {
                 <Swiper
                   modules={[Autoplay, Pagination]}
                   slidesPerView={1}
-                  loop={FLASH_SALE_SLIDES.length > 1}
+                  loop={slides.length > 1}
                   speed={600}
                   autoplay={
                     reducedMotion
@@ -101,9 +126,9 @@ export default function OffersSection() {
                   }}
                   className="flash-sale-swiper !pb-8"
                 >
-                  {FLASH_SALE_SLIDES.map((slide) => (
+                  {slides.map((slide) => (
                     <SwiperSlide key={slide.id}>
-                      <Link href={`/${locale}${slide.href}`} className="block group/item">
+                      <Link href={slide.href} className="block group/item">
                         {/* Aspect-ratio container with full image fit */}
                         <div className="relative w-full aspect-[559/380] rounded-xl overflow-hidden bg-[#fafafa] border border-gray-100 shadow-sm flex items-center justify-center p-1">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -144,11 +169,13 @@ export default function OffersSection() {
             {/* Content */}
             <div className="relative z-10">
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight drop-shadow-md">
-                Professional Car Service
+                {isAr ? "خدمة سيارات احترافية" : "Professional Car Service"}
               </h3>
 
               <p className="text-xs sm:text-[13.5px] text-white/80 mt-2.5 leading-relaxed max-w-sm drop-shadow">
-                Get expert car maintenance, diagnostics, and oil change services in Abu Dhabi and across the UAE.
+                {isAr
+                  ? "احصل على صيانة احترافية للسيارات، فحص كمبيوتر وتغيير زيت في أبوظبي وجميع أنحاء الإمارات."
+                  : "Get expert car maintenance, diagnostics, and oil change services in Abu Dhabi and across the UAE."}
               </p>
 
               <div className="mt-6">
@@ -156,7 +183,7 @@ export default function OffersSection() {
                   href={`/${locale}/car-service`}
                   className="inline-flex items-center justify-center bg-white text-gray-950 font-bold text-xs sm:text-sm px-6 py-2.5 rounded-lg hover:bg-[#ed1c24] hover:text-white transition-all duration-300 shadow-md group-hover:scale-105 cursor-pointer"
                 >
-                  Learn More
+                  {isAr ? "اعرف المزيد" : "Learn More"}
                 </Link>
               </div>
             </div>
@@ -179,11 +206,13 @@ export default function OffersSection() {
             {/* Content */}
             <div className="relative z-10">
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight drop-shadow-md">
-                Free Wheel Alignment
+                {isAr ? "ميزان ليزر مجاني للإطارات" : "Free Wheel Alignment"}
               </h3>
 
               <p className="text-xs sm:text-[13.5px] text-white/80 mt-2.5 leading-relaxed max-w-sm drop-shadow">
-                Enjoy free 3D computerized laser wheel alignment and expert fitment when you order your tyres online.
+                {isAr
+                  ? "استمتع بميزان إلكتروني ثلاثي الأبعاد مجاناً وتركيب احترافي عند طلب إطاراتك عبر الإنترنت."
+                  : "Enjoy free 3D computerized laser wheel alignment and expert fitment when you order your tyres online."}
               </p>
 
               <div className="mt-6">
@@ -191,7 +220,7 @@ export default function OffersSection() {
                   href={`/${locale}/tyres?offers=Free+Wheel+Alignment`}
                   className="inline-flex items-center justify-center bg-white text-gray-950 font-bold text-xs sm:text-sm px-6 py-2.5 rounded-lg hover:bg-[#ed1c24] hover:text-white transition-all duration-300 shadow-md group-hover:scale-105 cursor-pointer"
                 >
-                  Learn More
+                  {isAr ? "اعرف المزيد" : "Learn More"}
                 </Link>
               </div>
             </div>

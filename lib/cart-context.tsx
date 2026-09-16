@@ -40,7 +40,7 @@ type CartContextValue = {
   openAddedModal: (product: AddedModalProduct) => void;
   closeAddedModal: () => void;
   addItem: (product: Product, qty?: number) => Promise<{ error?: string }>;
-  updateQty: (uid: string, qty: number) => Promise<void>;
+  updateQty: (uid: string, qty: number) => Promise<{ error?: string } | void>;
   removeItem: (uid: string) => Promise<void>;
   applyCoupon: (code: string) => Promise<string | null>;
   removeCoupon: () => Promise<void>;
@@ -225,13 +225,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [persistId]);
 
-  const updateQty = useCallback(async (uid: string, qty: number) => {
-    if (!cartIdRef.current) return;
+  const updateQty = useCallback(async (uid: string, qty: number): Promise<{ error?: string } | void> => {
+    if (!cartIdRef.current) return { error: "Cart not found" };
     if (qty <= 0) {
       setLoading(true);
       try {
         const res = await api({ op: "remove", cartId: cartIdRef.current, uid });
         if (res.cart) setCart(res.cart);
+        if (res.error || res.userError) return { error: String(res.userError || res.error) };
       } finally { setLoading(false); }
       return;
     }
@@ -239,6 +240,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api({ op: "update", cartId: cartIdRef.current, uid, qty });
       if (res.cart) setCart(res.cart);
+      if (res.error || res.userError) return { error: String(res.userError || res.error) };
     } finally { setLoading(false); }
   }, []);
 

@@ -49,11 +49,11 @@ export default function LocaleHomePage({
       {/* ── Top Reasons To Buy Online Tyres (Why Choose Us) ──────── */}
       <WhyChooseUs locale={locale} />
 
-      {/* ── About Us (Immediately after Why Choose Us) ───────────── */}
-      <AboutUs />
-
       {/* ── Brands ──────────────────────────────────────────────── */}
       <BrandStrip />
+
+      {/* ── The UAE's Premier Destination For Tyres Online (About Us) ─ */}
+      <AboutUs locale={locale} />
 
       {/* ── Automotive Blog ─────────────────────────────────────── */}
       <AutomotiveBlog locale={locale} />

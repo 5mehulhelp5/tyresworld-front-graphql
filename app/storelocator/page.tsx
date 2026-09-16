@@ -90,7 +90,15 @@ function StoreLocatorContent() {
   const searchParams = useSearchParams();
   const locale = pathname.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
-  const { cartId, cartToken, refresh } = useCart();
+  const { cartId, cartToken, refresh, items, ready } = useCart();
+
+  // Empty cart guard: this page is for choosing delivery/installer for
+  // items already in the cart — nothing to redirect to /en/checkout for.
+  useEffect(() => {
+    if (ready && items.length === 0) {
+      router.replace(`/${locale}/cart`);
+    }
+  }, [ready, items.length, router, locale]);
 
   // API Data State (100% Dynamic from Magento GraphQL / API)
   const [cities, setCities] = useState<string[]>(DEFAULT_UAE_CITIES);

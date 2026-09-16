@@ -10,14 +10,18 @@ import {
   PRODUCTS_QUERY,
   PRODUCT_DETAIL_QUERY,
   PRODUCT_DETAIL_BY_URLKEY_QUERY,
+  PRODUCT_REVIEWS_PAGE_QUERY,
   BIKE_TYRE_TYPE_METADATA_QUERY,
 } from "@/lib/queries";
 import {
   parseGraphqlResponse,
   parseProductDetail,
+  mapReviews,
   type GqlProductsResponse,
   type GqlProductDetailResponse,
+  type GqlProductReviews,
   type ProductDetail,
+  type ProductReviewsData,
 } from "@/lib/magento";
 import { APP_CONFIG } from "@/src/config/app-config";
 import { resolveBrandInfo } from "@/lib/services/brands.service";
@@ -151,4 +155,34 @@ export async function getProductDetail(params: {
   [product] = await resolveBrandInfo([product], params.store);
 
   return { ok: true, status: 200, product };
+}
+
+export interface ProductReviewsPageResult {
+  ok: boolean;
+  status: number;
+  reviews: ProductReviewsData | null;
+  error?: string;
+}
+
+/** A further page of a product's real reviews, beyond the first page
+    already embedded in getProductDetail(). Same live ProductInterface
+    .reviews field — no fabricated pages when Magento has none. */
+export async function getProductReviewsPage(params: {
+  sku: string;
+  pageSize: number;
+  currentPage: number;
+  store?: string;
+}): Promise<ProductReviewsPageResult> {
+  const r = await magentoFetch<{ products?: { items?: { reviews?: GqlProductReviews | null }[] } }>(
+    PRODUCT_REVIEWS_PAGE_QUERY,
+    { sku: params.sku, pageSize: params.pageSize, currentPage: params.currentPage },
+    { store: params.store, noStore: true },
+  );
+
+  if (!r.ok || r.errors?.length) {
+    return { ok: r.ok, status: r.ok ? 200 : r.status, reviews: null, error: firstError(r) };
+  }
+
+  const raw = r.data?.products?.items?.[0]?.reviews;
+  return { ok: true, status: 200, reviews: mapReviews(raw) };
 }

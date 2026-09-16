@@ -61,24 +61,24 @@ export type Product = {
     promoDiscountStep?: number;
   };
 
+  /** Real per-SKU quantity constraints from Magento (Klever module) — the
+      only source for quantity selector options/limits; undefined only when
+      the query didn't request/return this field. */
+  qtyOptions?: {
+    salableQty?: number;
+    maxQty?: number;
+    defaultQty?: number;
+    options?: number[];
+    canAddToCart?: boolean;
+    partsCategory?: string;
+  };
+
   // Meta
   badge?: "New" | "Sale" | "Bestseller";
   rating: number;
   reviewCount: number;
   inStock?: boolean;
   quantity?: number;
-
-  // DriverReviews (Klever) per-product widget data
-  driverReviews?: DriverReviewsData;
-};
-
-/** Per-product DriverReviews data (from `driver_reviews` on ProductInterface). */
-export type DriverReviewsData = {
-  isTyre: boolean;
-  manufacturer: string;
-  model: string;
-  tyreSize: string;
-  vehicleType: string;
 };
 
 export type Category = {

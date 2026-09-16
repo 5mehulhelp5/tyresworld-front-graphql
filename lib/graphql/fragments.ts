@@ -24,6 +24,21 @@ export const KLEVER_SET_PRICING_FIELDS = `
   }
 `;
 
+/** Real per-SKU quantity constraints from the Klever module — salable_qty/
+    max_qty/default_qty/options drive every quantity selector (cart, listing
+    cards, PDP) instead of a fixed local list. Same auth gate as
+    kleverSetPricing. */
+export const KLEVER_QTY_OPTIONS_FIELDS = `
+  kleverQtyOptions {
+    salable_qty
+    max_qty
+    default_qty
+    options
+    can_add_to_cart
+    parts_category
+  }
+`;
+
 /** Minimal fields for product cards / listings (grids, carousels, search). */
 export const PRODUCT_CARD_FRAGMENT = /* GraphQL */ `
   fragment ProductCardFields on ProductInterface {
@@ -45,6 +60,7 @@ export const PRODUCT_CARD_FRAGMENT = /* GraphQL */ `
     origin
     warranty_period
     ${KLEVER_SET_PRICING_FIELDS}
+    ${KLEVER_QTY_OPTIONS_FIELDS}
   }
 `;
 
@@ -59,6 +75,20 @@ export const PRODUCT_DETAIL_FRAGMENT = /* GraphQL */ `
     stock_status
     review_count
     rating_summary
+    reviews(pageSize: 10, currentPage: 1) {
+      items {
+        nickname
+        summary
+        text
+        average_rating
+        created_at
+      }
+      page_info {
+        current_page
+        page_size
+        total_pages
+      }
+    }
     country_of_manufacture
     brand: mgs_brand
     offers
@@ -79,5 +109,6 @@ export const PRODUCT_DETAIL_FRAGMENT = /* GraphQL */ `
       }
     }
     ${KLEVER_SET_PRICING_FIELDS}
+    ${KLEVER_QTY_OPTIONS_FIELDS}
   }
 `;

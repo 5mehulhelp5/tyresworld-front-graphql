@@ -1,21 +1,33 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getHomepageData } from "@/lib/services/homepage.service";
+import { storeCode } from "@/lib/i18n";
 
-export async function GET() {
-  const homepageData = {
-    /* Homepage hero slides.
-       `image` is served on desktop, `imageMobile` on mobile screens. */
-    banners: [
-      {
-        id: "slide-shop-tyres-online",
-        href: "/tyres",
-        image: "/heropage-banner/shop-tyres-online-uae.png",
-        imageMobile: "/heropage-banner/shop-tyres-online-uae.png",
-        alt: "Shop Tyres Online - And install at our installer network in UAE",
-      },
-    ],
-  };
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const locale = searchParams.get("locale") === "ar" ? "ar" : "en";
+  const store = storeCode(locale);
 
-  return NextResponse.json(homepageData, {
-    headers: { "Cache-Control": "s-maxage=3600, stale-while-revalidate=600" },
-  });
+  const homepage = await getHomepageData(store);
+
+  const banners = [
+    {
+      id: "slide-shop-tyres-online",
+      href: "/tyres",
+      image: "/heropage-banner/shop-tyres-online-uae.png",
+      imageMobile: "/heropage-banner/shop-tyres-online-uae.png",
+      alt: "Shop Tyres Online - And install at our installer network in UAE",
+    },
+  ];
+
+  return NextResponse.json(
+    {
+      banners,
+      offers: homepage?.offers ?? null,
+      howItWorks: homepage?.how_it_works ?? null,
+      services: homepage?.services ?? null,
+      topReasons: homepage?.top_reasons ?? null,
+      about: homepage?.about ?? null,
+    },
+    { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } },
+  );
 }

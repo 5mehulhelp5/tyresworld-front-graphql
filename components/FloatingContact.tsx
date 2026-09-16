@@ -49,22 +49,16 @@ export default function FloatingContact() {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const name = String(form.get("name") ?? "").trim();
-    const email = String(form.get("email") ?? "").trim();
     const number = String(form.get("number") ?? "").trim();
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch("/api/request-callback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          telephone: number,
-          comment: `Callback request via floating button. Phone: ${number}`,
-        }),
+        body: JSON.stringify({ name, number }),
       });
       const data = await res.json().catch(() => null);
 
@@ -163,18 +157,6 @@ export default function FloatingContact() {
                     autoComplete="tel"
                     className="input-field"
                     placeholder="+971 50 000 0000"
-                  />
-                </label>
-
-                <label className="callback-field">
-                  <span>Email</span>
-                  <input
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    className="input-field"
-                    placeholder="yourname@example.com"
                   />
                 </label>
 

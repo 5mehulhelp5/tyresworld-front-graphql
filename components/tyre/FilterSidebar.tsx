@@ -162,9 +162,7 @@ export default function FilterSidebar({ groups, selected, onToggle, onClear, loa
             </div>
           ))}
         </div>
-      ) : visibleGroups.length === 0 ? (
-        <p className="py-6 text-sm text-ink/40">No filters available.</p>
-      ) : (
+      ) : visibleGroups.length === 0 ? null : (
         visibleGroups.map((group, i) => (
           <GroupSection
             key={group.code}

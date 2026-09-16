@@ -5,6 +5,7 @@ import {
   PRODUCT_CARD_FRAGMENT,
   PRODUCT_DETAIL_FRAGMENT,
   KLEVER_SET_PRICING_FIELDS,
+  KLEVER_QTY_OPTIONS_FIELDS,
 } from "./graphql/fragments";
 
 // ── Shared field fragments ────────────────────────────────────────
@@ -63,7 +64,21 @@ const CART_FIELDS = `
       price_including_tax { value currency }
       row_total_including_tax { value currency }
     }
-    product { name sku url_key thumbnail { url label } }
+    product {
+      name
+      sku
+      url_key
+      thumbnail { url label }
+      kleverQtyOptions {
+        salable_qty
+        max_qty
+        default_qty
+        options
+        can_add_to_cart
+        parts_category
+        unit_price
+      }
+    }
   }
   available_payment_methods { code title }
   shipping_addresses {
@@ -211,6 +226,32 @@ export const PRODUCT_DETAIL_BY_URLKEY_QUERY = /* GraphQL */ `
   ${PRODUCT_DETAIL_FRAGMENT}
 `;
 
+/** Additional pages of a product's real reviews beyond the first page
+    already embedded in PRODUCT_DETAIL_FRAGMENT — same ProductInterface
+    .reviews field, just a different currentPage. */
+export const PRODUCT_REVIEWS_PAGE_QUERY = /* GraphQL */ `
+  query ProductReviewsPage($sku: String!, $pageSize: Int!, $currentPage: Int!) {
+    products(filter: { sku: { eq: $sku } }) {
+      items {
+        reviews(pageSize: $pageSize, currentPage: $currentPage) {
+          items {
+            nickname
+            summary
+            text
+            average_rating
+            created_at
+          }
+          page_info {
+            current_page
+            page_size
+            total_pages
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const FILTERS_QUERY = /* GraphQL */ `
   query ProductFilters($search: String!) {
     products(
@@ -309,6 +350,7 @@ export const CATEGORY_PAGE_QUERY = /* GraphQL */ `
         origin
         warranty_period
         ${KLEVER_SET_PRICING_FIELDS}
+        ${KLEVER_QTY_OPTIONS_FIELDS}
         image { url label }
         categories { id name url_key }
         small_image { url label }
@@ -375,6 +417,7 @@ export const CATEGORY_PRODUCTS_BY_UID_QUERY = /* GraphQL */ `
         origin
         warranty_period
         ${KLEVER_SET_PRICING_FIELDS}
+        ${KLEVER_QTY_OPTIONS_FIELDS}
         image { url label }
         categories { id name url_key }
         price_range {
@@ -576,6 +619,7 @@ export const OFFERS_PRODUCTS_QUERY = /* GraphQL */ `
         origin
         warranty_period
         ${KLEVER_SET_PRICING_FIELDS}
+        ${KLEVER_QTY_OPTIONS_FIELDS}
         image { url label }
         categories { id name url_key }
         price_range {
@@ -698,6 +742,37 @@ export const KLEVER_BLOG_CATEGORIES_QUERY = /* GraphQL */ `
       meta_keywords
       meta_description
       sort_order
+    }
+  }
+`;
+
+// ── Staggered tyre bundles (Klever custom module) ──────────────────
+// Requires the x-klever-api-key header. Real front+rear pairing AND real
+// bundle_price computed server-side — this replaces any client-side
+// brand/pattern-matching guess plus a naive unitPrice*2+unitPrice*2 sum.
+// Confirmed live: for 155/70R13 front + 165/60R14 rear, returns a real
+// Zelda pair with bundle_price 664 (matching the two real set2_price
+// values, not a fabricated number).
+export const KLEVER_TYRE_BUNDLES_QUERY = /* GraphQL */ `
+  query KleverTyreBundles(
+    $width: String!
+    $height: String!
+    $rim: String!
+    $widthRear: String!
+    $heightRear: String!
+    $rimRear: String!
+  ) {
+    kleverTyreBundles(
+      width: $width
+      height: $height
+      rim: $rim
+      width_rear: $widthRear
+      height_rear: $heightRear
+      rim_rear: $rimRear
+    ) {
+      bundle_price
+      front { sku brand display_name name pattern size year runflat set2_price image url_key }
+      rear  { sku brand display_name name pattern size year runflat set2_price image url_key }
     }
   }
 `;
@@ -900,29 +975,6 @@ export const KLEVER_MAIN_MENU_QUERY = /* GraphQL */ `
         label
         url
       }
-    }
-  }
-`;
-
-// ── DriverReviews (Klever) widget SDK + config ────────────────────
-// Boots the DriverReviews JS SDK; per-product data comes via the
-// `driver_reviews` field on ProductInterface (see graphql/fragments).
-export const KLEVER_DRIVER_REVIEWS_QUERY = /* GraphQL */ `
-  query DriverReviewsConfig {
-    kleverDriverReviews {
-      enabled
-      widget_enabled
-      sdk_url
-      widget_pubkey
-      language
-      popup_style
-      slide_in_popup
-      product_widget_type
-      review_size
-      infinite_scroll
-      show_external_reviews
-      show_category_rating
-      show_jsonld
     }
   }
 `;
@@ -1433,54 +1485,6 @@ export const BESTSELLERS_QUERY = /* GraphQL */ `
   }
 `;
 
-// ── Store social URLs (MagePlaza Social Login extension) ──────────
-// Real schema: mpSocialUrls { items { social_type url } }
-// Note: the resolver has a storeId bug on this instance — API route handles it gracefully.
-export const SOCIAL_URLS_QUERY = /* GraphQL */ `
-  query SocialUrls {
-    mpSocialUrls {
-      items {
-        social_type
-        url
-      }
-    }
-  }
-`;
-
-// ── Snowdog Menu module ───────────────────────────────────────────
-// Real schema: snowdogMenus { items { menu_id identifier title css_class nodes { items { ... } } } }
-export const SNOWDOG_MENUS_QUERY = /* GraphQL */ `
-  query SnowdogMenus {
-    snowdogMenus {
-      items {
-        menu_id
-        identifier
-        title
-        css_class
-      }
-    }
-  }
-`;
-
-// Real schema: snowdogMenuNodes { items { node_id parent_id type title url_key level position classes } }
-// Note: image field requires inline fragment on SnowdogMenuNodeImageFieldInterface — omitted for simplicity.
-export const SNOWDOG_MENU_NODES_QUERY = /* GraphQL */ `
-  query SnowdogMenuNodes($identifier: String!) {
-    snowdogMenuNodes(identifier: $identifier) {
-      items {
-        node_id
-        parent_id
-        type
-        title
-        url_key
-        level
-        position
-        classes
-      }
-    }
-  }
-`;
-
 // ── Dynamic address form fields from Magento EAV (attributesForm) ──
 export const ATTRIBUTES_FORM_QUERY = /* GraphQL */ `
   query AttributesForm($formCode: String!) {
@@ -1720,6 +1724,103 @@ export const PICKUP_LOCATIONS_QUERY = /* GraphQL */ `
         phone
         latitude
         longitude
+      }
+    }
+  }
+`;
+
+// ── Homepage (Klever custom module) ────────────────────────────────
+export const KLEVER_HOMEPAGE_QUERY = /* GraphQL */ `
+  query KleverHomepage {
+    kleverHomepage {
+      hero {
+        heading_line1
+        heading_line2
+        image
+        image_mobile
+      }
+      offers {
+        title
+        subtitle
+        banners {
+          title
+          image
+          url
+        }
+      }
+      how_it_works {
+        title
+        steps {
+          number
+          title
+          description
+        }
+      }
+      services {
+        title
+        subtitle
+        tiles {
+          title
+          description
+          image
+          url
+        }
+      }
+      top_reasons {
+        title
+        items
+      }
+      about {
+        title
+        paragraphs
+      }
+    }
+  }
+`;
+
+// ── FAQ (Klever custom module) ──────────────────────────────────────
+// group_id filters to a single group when given; omitted returns all groups.
+export const KLEVER_FAQ_QUERY = /* GraphQL */ `
+  query KleverFaq($groupId: Int) {
+    kleverFaq(group_id: $groupId) {
+      group_id
+      name
+      icon
+      sort_order
+      faqs {
+        faq_id
+        question
+        answer
+        sort_order
+      }
+    }
+  }
+`;
+
+// ── Footer (Klever custom module) ──────────────────────────────────
+export const KLEVER_FOOTER_QUERY = /* GraphQL */ `
+  query KleverFooter {
+    kleverFooter {
+      contact {
+        address
+        email
+        license
+        map_url
+        phone
+        phone_label
+        whatsapp
+        whatsapp_label
+      }
+      columns {
+        title
+        links {
+          label
+          url
+        }
+      }
+      social {
+        platform
+        url
       }
     }
   }

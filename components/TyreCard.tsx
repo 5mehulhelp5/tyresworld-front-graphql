@@ -31,22 +31,6 @@ const BRAND_STYLE: Record<string, { bg: string; text: string; tagline?: string }
   arivo:       { bg: "#fff",    text: "#111", tagline: "BRITISH TECHNOLOGY" },
 };
 
-/* ── Brand warranty map ────────────────────────────────────────── */
-const WARRANTY_MAP: Record<string, string> = {
-  continental: "5 YEARS WARRANTY",
-  goodyear:    "5 YEARS WARRANTY",
-  michelin:    "5 YEARS WARRANTY",
-  bridgestone: "5 YEARS WARRANTY",
-  dunlop:      "5 YEARS WARRANTY",
-  yokohama:    "5 YEARS WARRANTY",
-  hankook:     "5 YEARS WARRANTY",
-  kumho:       "5 YEARS WARRANTY",
-  toyo:        "5 YEARS WARRANTY",
-  falken:      "5 YEARS WARRANTY",
-  nexen:       "5 YEARS WARRANTY",
-  roadstone:   "5 YEARS WARRANTY",
-};
-
 /* ── Name parser — extracts pattern, size, loadIndex, year ──────── */
 function parseTyreName(name: string) {
   const sizeMatch = name.match(/(\d{3}\/\d{2,3}\s*[Rr]\d{2})/);
@@ -137,13 +121,14 @@ export default function TyreCard({ product }: { product: Product }) {
   const waUrl    = `https://wa.me/966500000000?text=${encodeURIComponent(`Hi, I'm interested in: ${product.name}`)}`;
   const bStyle   = BRAND_STYLE[brand.toLowerCase()] ?? { bg: "#fff", text: "#111" };
   const logoUrl = product.brandLogoUrl;
-  const warranty = WARRANTY_MAP[brand.toLowerCase()] ?? "1 YEAR WARRANTY";
+  const warranty = product.warrantyPeriod;
 
   const offerLabels = useOfferLabels();
   const offerLabel  = product.offersId ? offerLabels[product.offersId] : undefined;
 
   const { addItem } = useCart();
-  const [qty,        setQty]        = useState(1);
+  const maxQty = product.qtyOptions?.maxQty;
+  const [qty,        setQty]        = useState(product.qtyOptions?.defaultQty ?? 1);
   const [adding,     setAdding]     = useState(false);
   const [cartAdded,  setCartAdded]  = useState(false);
   const [addError,   setAddError]   = useState<string | null>(null);
@@ -221,10 +206,12 @@ export default function TyreCard({ product }: { product: Product }) {
           className="object-contain p-4"
         />
 
-        {/* Warranty badge */}
-        <span className="absolute bottom-0 left-0 bg-[#ed1c24] text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 leading-none">
-          {warranty}
-        </span>
+        {/* Warranty badge — only when Magento actually has a warranty value for this SKU */}
+        {warranty && (
+          <span className="absolute bottom-0 left-0 bg-[#ed1c24] text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 leading-none">
+            {warranty}
+          </span>
+        )}
 
         {/* Year */}
         {year && (
@@ -270,13 +257,14 @@ export default function TyreCard({ product }: { product: Product }) {
           )}
         </div>
 
-        {/* Rating */}
+        {/* Rating — commented out for now
         <div className="flex items-center gap-1 flex-wrap">
           <Stars rating={product.rating} />
           {product.rating > 0 && product.reviewCount > 0 && (
             <span className="text-[10px] text-gray-400">({product.reviewCount} reviews)</span>
           )}
         </div>
+        */}
 
         <div className="border-t border-gray-100 my-0.5" />
 
@@ -341,8 +329,9 @@ export default function TyreCard({ product }: { product: Product }) {
                 <span className="w-7 text-center text-[13px] font-bold select-none text-gray-900">{qty}</span>
                 <button
                   type="button"
-                  onClick={() => setQty(q => q + 1)}
-                  className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors text-base font-bold leading-none cursor-pointer"
+                  onClick={() => setQty(q => (maxQty != null ? Math.min(maxQty, q + 1) : q + 1))}
+                  disabled={maxQty != null && qty >= maxQty}
+                  className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors text-base font-bold leading-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   aria-label="Increase quantity"
                 >
                   +

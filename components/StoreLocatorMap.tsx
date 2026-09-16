@@ -16,6 +16,10 @@ export interface StoreLocation {
   whatsapp?: string;
   badge?: string;
   openingHours?: string;
+  /** Real per-weekday time slots (index 0 = Sunday..6 = Saturday) parsed
+      server-side from Magento's own opening_hours field — see
+      /api/store-locator. Empty day array means genuinely closed that day. */
+  openingHoursByDay?: string[][];
 }
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

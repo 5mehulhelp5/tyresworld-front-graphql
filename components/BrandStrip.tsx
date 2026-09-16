@@ -77,6 +77,7 @@ export default function BrandStrip() {
     };
   }, []);
 
+  const isAr = locale === "ar";
   const hasBrands = !!brands && brands.length > 0;
 
   return (
@@ -86,13 +87,15 @@ export default function BrandStrip() {
         {/* ── Section title ───────────────────────────────────── */}
         <div className="section-title mb-10 text-center max-w-3xl mx-auto">
           <h2 className="text-2xl sm:text-3xl lg:text-[32px] font-black uppercase tracking-wide text-black mb-3 leading-tight">
-            Shop by{" "}
+            {isAr ? "تسوق حسب " : "Shop by "}{" "}
             <span className="text-[#ed1c24] theme_color">
-              Tyre Brands
+              {isAr ? "ماركات الإطارات" : "Tyre Brands"}
             </span>
           </h2>
           <p className="text-gray-700 text-xs sm:text-[13.5px] leading-relaxed font-normal max-w-2xl mx-auto m-0 tracking-normal">
-            Browse a wide selection of car tyre brands and purchase tyres online at the best prices. Our customer friendly fitment partners across the UAE are ready to provide you with exceptional service.
+            {isAr
+              ? "تصفح تشكيلة واسعة من أشهر ماركات الإطارات واشترِ عبر الإنترنت بأفضل الأسعار مع مراكز تركيب معتمدة في جميع أنحاء الإمارات."
+              : "Browse a wide selection of car tyre brands and purchase tyres online at the best prices. Our customer friendly fitment partners across the UAE are ready to provide you with exceptional service."}
           </p>
         </div>
 

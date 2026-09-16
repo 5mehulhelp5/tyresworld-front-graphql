@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay } from "swiper/modules";
@@ -12,12 +12,13 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
+import type { KleverHomeServices } from "@/lib/services/homepage.service";
 
 interface AutoCareServicesProps {
   locale?: string;
 }
 
-interface AutoCareCategory {
+export interface AutoCareCategory {
   id: string;
   slug: string;
   title: string;
@@ -30,14 +31,73 @@ interface AutoCareCategory {
   ctaText: string;
 }
 
-const AUTO_CARE_CATEGORIES: AutoCareCategory[] = [
+/** Per-category visual/cosmetic presentation — badge text, CTA label, and
+    banner/round images have no field in kleverHomepage.services.tiles
+    (which only has title/description/image/url), so they stay local,
+    keyed by the real tile's own title. Real title/description/url always
+    come from the API tile itself. */
+const PRESENTATION: Record<string, {
+  bannerTitle: string; bannerBg: string; roundImg: string; badge: string; feature: string; ctaText: string;
+}> = {
+  "car tyres": {
+    bannerTitle: "PREMIUM CAR TYRES",
+    bannerBg: "/bg/car-tyre-new-1.webp",
+    roundImg: "/YourTrustedAutoCare/service-sample.jpg",
+    badge: "100% Fitment",
+    feature: "Free Mobile Doorstep Fitting",
+    ctaText: "Shop Tyres",
+  },
+  "car insurance": {
+    bannerTitle: "CAR INSURANCE ONLINE",
+    bannerBg: "/images/bg/car-insurance-banner.webp",
+    roundImg: "/images/bg/car-insurance-banner.webp",
+    badge: "Instant Quotes",
+    feature: "Best Rates & Instant Policy",
+    ctaText: "Get Insurance",
+  },
+  "rims/wheels": {
+    bannerTitle: "ALLOY RIMS & WHEELS",
+    bannerBg: "/YourTrustedAutoCare/car-rim.jpg",
+    roundImg: "/YourTrustedAutoCare/car-rim.jpg",
+    badge: "Custom Alloys",
+    feature: "Precision Wheel Fitment",
+    ctaText: "Explore Rims",
+  },
+  "battery": {
+    bannerTitle: "EXPRESS BATTERY FITTING",
+    bannerBg: "/images/bg/car-battery-banner.png",
+    roundImg: "/images/bg/car-battery-banner.png",
+    badge: "30-Min Delivery",
+    feature: "Official Warranty Included",
+    ctaText: "Order Battery",
+  },
+  "car service": {
+    bannerTitle: "COMPLETE AUTO REPAIR",
+    bannerBg: "/YourTrustedAutoCare/car-service-img.jpg",
+    roundImg: "/YourTrustedAutoCare/car-service-img.jpg",
+    badge: "Full Diagnostics",
+    feature: "Certified Expert Mechanics",
+    ctaText: "Book Service",
+  },
+  "motorbike tyres": {
+    bannerTitle: "MOTORBIKE TYRES",
+    bannerBg: "/YourTrustedAutoCare/motorbike-tyre.jpg",
+    roundImg: "/YourTrustedAutoCare/motorbike-tyre.jpg",
+    badge: "High Grip",
+    feature: "Top Brands for All Bikes",
+    ctaText: "Shop Bike Tyres",
+  },
+};
+const FALLBACK_PRESENTATION = PRESENTATION["car service"];
+
+const DEFAULT_CATEGORIES: AutoCareCategory[] = [
   {
     id: "cat-tyres",
     slug: "tyres",
     title: "Car Tyres",
     bannerTitle: "PREMIUM CAR TYRES",
     bannerBg: "/bg/car-tyre-new-1.webp",
-    roundImg: "/YourTrustedAutoCare/service-sample.jpg",
+    roundImg: "/images/home/car-tyres.png",
     badge: "100% Fitment",
     description: "Premium car, SUV & 4x4 tyres from top global brands with manufacturer warranty and free mobile doorstep fitting.",
     feature: "Free Mobile Doorstep Fitting",
@@ -49,7 +109,7 @@ const AUTO_CARE_CATEGORIES: AutoCareCategory[] = [
     title: "Car Insurance",
     bannerTitle: "CAR INSURANCE ONLINE",
     bannerBg: "/images/bg/car-insurance-banner.webp",
-    roundImg: "/images/bg/car-insurance-banner.webp",
+    roundImg: "/images/home/car-insurance.png",
     badge: "Instant Quotes",
     description: "Compare comprehensive & third-party car insurance quotes instantly from UAE's leading insurance providers.",
     feature: "Best Rates & Instant Policy",
@@ -61,7 +121,7 @@ const AUTO_CARE_CATEGORIES: AutoCareCategory[] = [
     title: "Rims / Wheels",
     bannerTitle: "ALLOY RIMS & WHEELS",
     bannerBg: "/YourTrustedAutoCare/car-rim.jpg",
-    roundImg: "/YourTrustedAutoCare/car-rim.jpg",
+    roundImg: "/images/home/car-rim.png",
     badge: "Custom Alloys",
     description: "Discover stylish alloy wheels, high-performance rims, precision fitment, and professional rim repair services.",
     feature: "Precision Wheel Fitment",
@@ -73,9 +133,9 @@ const AUTO_CARE_CATEGORIES: AutoCareCategory[] = [
     title: "Car Battery",
     bannerTitle: "EXPRESS BATTERY FITTING",
     bannerBg: "/images/bg/car-battery-banner.png",
-    roundImg: "/images/bg/car-battery-banner.png",
+    roundImg: "/images/home/car-battery.png",
     badge: "30-Min Delivery",
-    description: "On-demand car battery replacement, digital battery health testing, and official warranty delivered in 30 minutes.",
+    description: "Battery testing, on-site replacement, and installation using reliable battery brands suited for UAE conditions.",
     feature: "Official Warranty Included",
     ctaText: "Order Battery",
   },
@@ -83,32 +143,64 @@ const AUTO_CARE_CATEGORIES: AutoCareCategory[] = [
     id: "cat-service",
     slug: "car-service",
     title: "Car Service",
-    bannerTitle: "COMPLETE AUTO REPAIR",
-    bannerBg: "/YourTrustedAutoCare/car-service-img.jpg",
-    roundImg: "/YourTrustedAutoCare/car-service-img.jpg",
-    badge: "Full Diagnostics",
-    description: "Complete car servicing, brake replacement, AC gas refill, oil change, laser alignment and mechanical repairs.",
-    feature: "Certified Expert Mechanics",
+    bannerTitle: "CAR REPAIR & SERVICE",
+    bannerBg: "/images/bg/car-service-banner.webp",
+    roundImg: "/images/home/car-service.png",
+    badge: "Expert Mechanics",
+    description: "Full mechanical checkups, oil changes, brake pads, AC services, wheel alignment, and minor repairs.",
+    feature: "Certified Service Packages",
     ctaText: "Book Service",
   },
   {
-    id: "cat-motorbike",
+    id: "cat-moto",
     slug: "motorcycle-tyre",
-    title: "Motorbike Tyres",
+    title: "Motorcycle Tyres",
     bannerTitle: "MOTORBIKE TYRES",
-    bannerBg: "/YourTrustedAutoCare/motorbike-tyre.jpg",
-    roundImg: "/YourTrustedAutoCare/motorbike-tyre.jpg",
-    badge: "High Grip",
-    description: "High-performance motorcycle tyres for sports, cruiser, off-road and commuter bikes with expert fitting.",
-    feature: "Top Brands for All Bikes",
-    ctaText: "Shop Bike Tyres",
+    bannerBg: "/images/bg/motorcycle-tyre-banner.webp",
+    roundImg: "/images/home/motorbike.png",
+    badge: "Top Road Grip",
+    description: "High-performance motorcycle tyres engineered for extreme heat and demanding asphalt in UAE.",
+    feature: "Professional Moto Fitting",
+    ctaText: "Shop Moto Tyres",
   },
 ];
 
 export default function AutoCareServices({ locale = "en" }: AutoCareServicesProps) {
+  const isAr = locale === "ar";
   const swiperRef = useRef<SwiperType | null>(null);
   const [isBeginning, setIsBeginning] = useState(true);
   const [isEnd, setIsEnd] = useState(false);
+  const [servicesData, setServicesData] = useState<KleverHomeServices | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/homepage?locale=${locale}`)
+      .then((res) => res.json())
+      .then((data) => { if (active) setServicesData(data?.services ?? null); })
+      .catch(() => { /* use defaults */ });
+    return () => { active = false; };
+  }, [locale]);
+
+  const categories = (servicesData?.tiles && servicesData.tiles.length > 0)
+    ? servicesData.tiles.map((tile, idx) => {
+        const key = (tile.title ?? "").trim().toLowerCase();
+        const fallback = DEFAULT_CATEGORIES[idx % DEFAULT_CATEGORIES.length];
+        const presentation = PRESENTATION[key] ?? fallback;
+        const cleanSlug = (tile.url ?? "").replace(/^\/(en|ar)\//, "").replace(/^\//, "").split("?")[0];
+        return {
+          id: key || `tile-${idx}`,
+          slug: cleanSlug || fallback.slug,
+          title: tile.title ?? fallback.title,
+          description: tile.description ?? fallback.description,
+          bannerTitle: presentation.bannerTitle,
+          bannerBg: presentation.bannerBg,
+          roundImg: presentation.roundImg,
+          badge: presentation.badge,
+          feature: presentation.feature,
+          ctaText: presentation.ctaText,
+        };
+      })
+    : DEFAULT_CATEGORIES;
 
   return (
     <section className="ptr-section bg-[#fbfbfb] py-12 lg:py-16 border-t border-b border-gray-100/80">
@@ -117,18 +209,20 @@ export default function AutoCareServices({ locale = "en" }: AutoCareServicesProp
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#ed1c24]/10 border border-[#ed1c24]/20 text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] text-[#ed1c24] mb-3">
             <span className="w-2 h-2 rounded-full bg-[#ed1c24] animate-pulse" />
-            ONE-STOP AUTO CARE
+            {isAr ? "عناية متكاملة بالسيارات" : "ONE-STOP AUTO CARE"}
           </div>
 
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-gray-950 font-sans uppercase">
-            YOUR TRUSTED ONE-STOP{" "}
+            {isAr ? "وجهتك الموثوقة الأولى " : "YOUR TRUSTED ONE-STOP "}{" "}
             <span className="text-[#ed1c24]">
-              SHOP FOR AUTO CARE
+              {isAr ? "لخدمات وصيانة السيارات" : "SHOP FOR AUTO CARE"}
             </span>
           </h2>
 
           <p className="text-xs sm:text-sm text-gray-600 mt-2.5 leading-relaxed font-normal">
-            At TyresWorld, we provide a wide range of car and motorcycle tyres across the UAE. Our experienced technicians use modern equipment and quality products to keep your vehicle safe and road-ready.
+            {isAr
+              ? "في تايرز وورلد، نوفر مجموعة واسعة من إطارات السيارات والدراجات النارية في جميع أنحاء الإمارات. يستخدم فنيونا ذوو الخبرة أحدث المعدات للحفاظ على سلامة سيارتك."
+              : "At TyresWorld, we provide a wide range of car and motorcycle tyres across the UAE. Our experienced technicians use modern equipment and quality products to keep your vehicle safe and road-ready."}
           </p>
         </div>
 
@@ -139,9 +233,8 @@ export default function AutoCareServices({ locale = "en" }: AutoCareServicesProp
             type="button"
             onClick={() => swiperRef.current?.slidePrev()}
             aria-label="Previous slide"
-            className={`absolute top-1/2 -translate-y-1/2 -left-3 sm:-left-5 z-20 w-10 h-10 rounded-full bg-[#ed1c24] hover:bg-[#c81018] text-white flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${
-              isBeginning ? "opacity-40 cursor-not-allowed" : "opacity-95 hover:opacity-100 hover:scale-105"
-            }`}
+            className={`absolute top-1/2 -translate-y-1/2 -left-3 sm:-left-5 z-20 w-10 h-10 rounded-full bg-[#ed1c24] hover:bg-[#c81018] text-white flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${isBeginning ? "opacity-40 cursor-not-allowed" : "opacity-95 hover:opacity-100 hover:scale-105"
+              }`}
           >
             <ChevronLeft size={20} strokeWidth={2.4} />
           </button>
@@ -150,9 +243,8 @@ export default function AutoCareServices({ locale = "en" }: AutoCareServicesProp
             type="button"
             onClick={() => swiperRef.current?.slideNext()}
             aria-label="Next slide"
-            className={`absolute top-1/2 -translate-y-1/2 -right-3 sm:-right-5 z-20 w-10 h-10 rounded-full bg-[#ed1c24] hover:bg-[#c81018] text-white flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${
-              isEnd ? "opacity-40 cursor-not-allowed" : "opacity-95 hover:opacity-100 hover:scale-105"
-            }`}
+            className={`absolute top-1/2 -translate-y-1/2 -right-3 sm:-right-5 z-20 w-10 h-10 rounded-full bg-[#ed1c24] hover:bg-[#c81018] text-white flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${isEnd ? "opacity-40 cursor-not-allowed" : "opacity-95 hover:opacity-100 hover:scale-105"
+              }`}
           >
             <ChevronRight size={20} strokeWidth={2.4} />
           </button>
@@ -178,7 +270,7 @@ export default function AutoCareServices({ locale = "en" }: AutoCareServicesProp
             }}
             className="!pb-4 !px-1"
           >
-            {AUTO_CARE_CATEGORIES.map((item) => (
+            {categories.map((item) => (
               <SwiperSlide key={item.id} className="h-auto">
                 <div className="ptr-sp-card h-full flex flex-col bg-white rounded-2xl border border-gray-200/90 hover:border-[#ed1c24]/50 hover:shadow-xl transition-all duration-300 overflow-hidden group">
                   {/* ── Top Banner Image ── */}

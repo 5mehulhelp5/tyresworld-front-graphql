@@ -1,12 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
   CheckCircle,
   Loader2,
 } from "lucide-react";
+
+type ContactInfo = {
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phone_label?: string | null;
+  whatsapp?: string | null;
+  whatsapp_label?: string | null;
+  map_url?: string | null;
+};
+
+type SocialLink = {
+  platform: string;
+  url: string;
+};
 
 export default function ContactPage() {
   const [name, setName] = useState("");
@@ -16,6 +31,19 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+
+  const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
+
+  useEffect(() => {
+    fetch("/api/footer")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.footer?.contact) setContactInfo(data.footer.contact);
+        if (data?.footer?.social) setSocialLinks(data.footer.social);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,22 +129,23 @@ export default function ContactPage() {
 
             <div className="space-y-5 mb-8">
               {/* ADDRESS */}
-              <div className="flex items-start gap-4">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-                  <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                  </svg>
+              {(contactInfo?.address ?? true) && (
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                    <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                    </svg>
+                  </div>
+                  <div className="pt-0.5">
+                    <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
+                      ADDRESS
+                    </h3>
+                    <p className="text-xs sm:text-[13.5px] text-gray-800 leading-snug">
+                      {contactInfo?.address || "DSP Trade Hub FZ-LLC, Compass Building, Al Shohada Road, AL Hamra Industrial Zone-FZ, Ras Al Khaimah, United Arab Emirates"}
+                    </p>
+                  </div>
                 </div>
-                <div className="pt-0.5">
-                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
-                    ADDRESS
-                  </h3>
-                  <p className="text-xs sm:text-[13.5px] text-gray-800 leading-snug">
-                    DSP Trade Hub FZ–LLC , Compass Building, Al Shohada Road, AL Hamra<br />
-                    Industrial Zone–FZ, Ras Al Khaimah, UAE
-                  </p>
-                </div>
-              </div>
+              )}
 
               {/* WHATSAPP */}
               <div className="flex items-start gap-4">
@@ -130,12 +159,16 @@ export default function ContactPage() {
                     WHATSAPP
                   </h3>
                   <a
-                    href="https://api.whatsapp.com/send/?phone=971505069575&text=Hi%20tyresworld.ae"
+                    href={
+                      contactInfo?.whatsapp
+                        ? `https://api.whatsapp.com/send/?phone=${contactInfo.whatsapp.replace(/\D/g, "")}&text=Hi%20tyresworld.ae`
+                        : "https://api.whatsapp.com/send/?phone=971505069575&text=Hi%20tyresworld.ae"
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs sm:text-[13.5px] text-gray-800 hover:text-[#ed1c24] transition-colors font-medium inline-block"
                   >
-                    +971 50 506 9575
+                    {contactInfo?.whatsapp_label || contactInfo?.whatsapp || "+971 50 506 9575"}
                   </a>
                 </div>
               </div>
@@ -152,10 +185,10 @@ export default function ContactPage() {
                     EMAIL
                   </h3>
                   <a
-                    href="mailto:info@tyresworld.ae"
+                    href={`mailto:${contactInfo?.email || "info@tyresworld.ae"}`}
                     className="text-xs sm:text-[13.5px] text-gray-800 hover:text-[#ed1c24] transition-colors font-medium inline-block"
                   >
-                    info@tyresworld.ae
+                    {contactInfo?.email || "info@tyresworld.ae"}
                   </a>
                 </div>
               </div>
@@ -189,7 +222,10 @@ export default function ContactPage() {
               <div className="flex items-center gap-3">
                 {/* Facebook */}
                 <a
-                  href="https://www.facebook.com/profile.php?id=61565576775985"
+                  href={
+                    socialLinks.find((s) => s.platform.toLowerCase().includes("facebook"))?.url ||
+                    "https://www.facebook.com/tyresworld.ae/"
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Facebook"
@@ -202,7 +238,10 @@ export default function ContactPage() {
 
                 {/* Instagram */}
                 <a
-                  href="https://www.instagram.com/tyresworld.ae/"
+                  href={
+                    socialLinks.find((s) => s.platform.toLowerCase().includes("instagram"))?.url ||
+                    "https://www.instagram.com/tyresworld.ae/"
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Instagram"

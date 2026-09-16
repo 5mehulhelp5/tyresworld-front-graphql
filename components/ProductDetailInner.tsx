@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ChevronRight, ChevronLeft, Info, X, Loader2, Check, ShoppingBag, Star, ArrowLeft, ArrowRight, CheckCircle, Gauge, Leaf } from "lucide-react";
+import { ChevronRight, ChevronLeft, ChevronDown, Info, X, Loader2, Check, ShoppingBag, Star, ArrowLeft, ArrowRight, CheckCircle, Gauge, Leaf } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
@@ -17,7 +17,6 @@ import TyreListingCard from "@/components/TyreListingCard";
 import TyreListingCardSkeleton from "@/components/TyreListingCardSkeleton";
 import TyreFinder from "@/components/TyreFinder";
 import StickyBottomFinder from "@/components/home/partora/StickyBottomFinder";
-import DriverReviewsWidget from "@/components/DriverReviews/DriverReviewsWidget";
 import VehicleFitmentModal from "@/components/VehicleFitmentModal";
 import { APP_CONFIG } from "@/src/config/app-config";
 import JsonLd from "@/components/JsonLd";
@@ -181,33 +180,32 @@ function SpecsTable({
 }) {
   const brandName = product.brandName ?? product.brand ?? null;
   const origin = product.country ?? product.origin ?? null;
-  // No fabricated fallback — show "—" like every other spec when Magento has no warranty value.
   const warranty = product.warrantyPeriod ?? null;
 
-  const rows = [
-    {
-      left: { label: "Brand", value: brandName },
-      right: { label: "Pattern", value: specs.pattern },
-    },
-    {
-      left: { label: "Size", value: specs.size },
-      right: { label: "Load Index", value: specs.loadIndex },
-    },
-    {
-      left: { label: "Origin", value: origin },
-      right: { label: "Year", value: specs.year },
-    },
-    {
-      left: { label: "Warranty Period", value: warranty },
-      right: isMotorcycleProduct(product)
-        ? { label: "Bike Tyre Type", value: product.bikeTyreType ?? null }
-        : specs.isRunFlat
-        ? { label: "Run Flat", value: "Yes" }
-        : specs.oemMarking
-        ? { label: "OEM Marking", value: specs.oemMarking }
-        : { label: "", value: "" },
-    },
-  ];
+  const allSpecs: { label: string; value: string }[] = [];
+  if (brandName) allSpecs.push({ label: "Brand", value: brandName });
+  if (specs.pattern) allSpecs.push({ label: "Pattern", value: specs.pattern });
+  if (specs.size) allSpecs.push({ label: "Size", value: specs.size });
+  if (specs.loadIndex) allSpecs.push({ label: "Load Index", value: specs.loadIndex });
+  if (origin) allSpecs.push({ label: "Origin", value: origin });
+  if (specs.year) allSpecs.push({ label: "Year", value: specs.year });
+  if (warranty) allSpecs.push({ label: "Warranty Period", value: warranty });
+
+  if (isMotorcycleProduct(product)) {
+    if (product.bikeTyreType) allSpecs.push({ label: "Bike Tyre Type", value: product.bikeTyreType });
+  } else if (specs.isRunFlat) {
+    allSpecs.push({ label: "Run Flat", value: "Yes" });
+  } else if (specs.oemMarking) {
+    allSpecs.push({ label: "OEM Marking", value: specs.oemMarking });
+  }
+
+  const rows: { left: { label: string; value: string }; right?: { label: string; value: string } }[] = [];
+  for (let i = 0; i < allSpecs.length; i += 2) {
+    rows.push({
+      left: allSpecs[i],
+      right: allSpecs[i + 1],
+    });
+  }
 
   return (
     <div className="border border-gray-200/90 rounded-xl overflow-hidden bg-white shadow-2xs flex flex-col justify-between">
@@ -225,17 +223,15 @@ function SpecsTable({
             {/* Left Column */}
             <div className="flex items-center gap-2 sm:gap-3 pr-2">
               <span className="text-gray-500 font-medium w-24 sm:w-28 shrink-0">{row.left.label}</span>
-              <span className="text-gray-950 font-bold truncate">{row.left.value ?? "—"}</span>
+              <span className="text-gray-950 font-bold truncate">{row.left.value}</span>
             </div>
             {/* Right Column */}
-            <div className="flex items-center gap-2 sm:gap-3 pl-2">
-              {row.right.label ? (
-                <>
-                  <span className="text-gray-500 font-medium w-20 sm:w-24 shrink-0">{row.right.label}</span>
-                  <span className="text-gray-950 font-bold truncate">{row.right.value ?? "—"}</span>
-                </>
-              ) : null}
-            </div>
+            {row.right ? (
+              <div className="flex items-center gap-2 sm:gap-3 pl-2">
+                <span className="text-gray-500 font-medium w-20 sm:w-24 shrink-0">{row.right.label}</span>
+                <span className="text-gray-950 font-bold truncate">{row.right.value}</span>
+              </div>
+            ) : <div />}
           </div>
         ))}
       </div>
@@ -279,15 +275,47 @@ function PricingCard({
   const setSize = isMotorcycleProduct(product) ? 2 : 4;
 
   const { addItem } = useCart();
-  const [qty, setQty] = useState(setSize);
+  const [qty, setQty] = useState(product.qtyOptions?.defaultQty ?? setSize);
+  const [qtyOpen, setQtyOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [cartAdded, setCartAdded] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const qtyRef = useRef<HTMLDivElement>(null);
+
+  // Sync qty when product or defaultQty changes
+  useEffect(() => {
+    setQty(product.qtyOptions?.defaultQty ?? setSize);
+  }, [product.sku, product.qtyOptions?.defaultQty, setSize]);
+
+  // Close quantity dropdown when clicking outside
+  useEffect(() => {
+    if (!qtyOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (qtyRef.current && !qtyRef.current.contains(e.target as Node)) {
+        setQtyOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [qtyOpen]);
+
+  // Options come directly from the API (product.qtyOptions.options), falling back to maxQty or 8
+  const apiOptions = product.qtyOptions?.options;
+  const availableOptions =
+    apiOptions && apiOptions.length > 0
+      ? apiOptions
+      : Array.from({ length: product.qtyOptions?.maxQty ?? 8 }, (_, i) => i + 1);
+  const qtyMenuOptions = Array.from(new Set([...availableOptions, qty])).sort((a, b) => a - b);
+  const qtySelectable = qtyMenuOptions.length > 1;
 
   /* The live site never offers Add to Cart for motorcycle tyres — every
      product checked shows "Make Enquiry" regardless of its real Magento
      stock_status (confirmed IN_STOCK for at least one), so this is a fixed
      category rule, not a stock check, for bikes — same as the listing cards. */
-  const isOutOfStock = isMotorcycleProduct(product) || product.inStock === false;
+  const isOutOfStock =
+    isMotorcycleProduct(product) ||
+    product.inStock === false ||
+    product.qtyOptions?.canAddToCart === false;
 
   /* Real per-set price from Magento's own pricing/promo rules
      (kleverSetPricing) when available for this SKU's set size — set4/set2
@@ -299,7 +327,7 @@ function PricingCard({
   const setOf4Price = hasPrice ? realSetPrice ?? product.price * setSize : 0;
 
   async function handleAddToCart() {
-    if (adding) return;
+    if (adding || cartAdded) return;
     setAdding(true);
     setAddError(null);
     try {
@@ -307,6 +335,9 @@ function PricingCard({
       if (result.error) {
         setAddError(result.error);
         setTimeout(() => setAddError(null), 4000);
+      } else {
+        setCartAdded(true);
+        setTimeout(() => setCartAdded(false), 2000);
       }
     } finally {
       setAdding(false);
@@ -366,20 +397,71 @@ function PricingCard({
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1"
-                value={qty}
-                onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-12 h-10 bg-[#f0f0f0] text-gray-950 border border-gray-200 text-center font-black rounded-md text-sm focus:outline-none shrink-0"
-              />
+              {/* Custom quantity dropdown powered by API */}
+              <div className="qty-select" ref={qtyRef}>
+                <button
+                  type="button"
+                  className="qty-trigger !w-14 !h-10 !text-sm"
+                  disabled={!qtySelectable}
+                  onClick={() => setQtyOpen((o) => !o)}
+                  aria-haspopup="listbox"
+                  aria-expanded={qtyOpen}
+                  aria-label={`Quantity: ${qty}`}
+                >
+                  <span>{qty}</span>
+                  <ChevronDown
+                    size={14}
+                    className={`qty-caret ${qtyOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {qtyOpen && qtySelectable && (
+                  <ul
+                    className="qty-menu !w-16 !z-50"
+                    role="listbox"
+                    aria-label="Quantity"
+                  >
+                    {qtyMenuOptions.map((n) => (
+                      <li key={n} role="option" aria-selected={n === qty}>
+                        <button
+                          type="button"
+                          className={`qty-option ${n === qty ? "is-selected" : ""}`}
+                          onClick={() => {
+                            setQty(n);
+                            setQtyOpen(false);
+                          }}
+                        >
+                          <span>{n}</span>
+                          {n === qty && <Check size={13} className="qty-check" />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Keep the value in the DOM for form/accessibility parity */}
+                <input type="hidden" name="qty" value={qty} readOnly />
+              </div>
+
               <button
                 type="button"
                 onClick={handleAddToCart}
                 disabled={adding}
                 className="btn-slide-black flex-1 h-10 text-xs font-black uppercase tracking-wider rounded-md disabled:opacity-60 cursor-pointer shadow-2xs"
               >
-                <span>{adding ? "Adding..." : "ADD TO CART"}</span>
+                {adding ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Adding…</span>
+                  </span>
+                ) : cartAdded ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Check size={14} />
+                    <span>Added</span>
+                  </span>
+                ) : (
+                  <span>ADD TO CART</span>
+                )}
               </button>
             </div>
             {addError && <p className="text-[11px] text-red-500 text-center">{addError}</p>}
@@ -469,9 +551,27 @@ function PricingCard({
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   RATINGS SECTION  — matches reference driverreviews design
+   RATINGS & REVIEWS SECTION — real rating_summary/review_count/reviews
+   from Magento only. No third-party review-widget branding or copy.
 ══════════════════════════════════════════════════════════════════ */
-const DR_MAGENTA = "#8b1a6b";
+function formatReviewDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function ReviewStars({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <svg key={i} width={size} height={size} viewBox="0 0 12 12" fill={i <= Math.round(rating) ? "#ed1c24" : "#E5E7EB"}>
+          <path d="M6 1l1.4 2.8 3.1.4-2.2 2.2.5 3.1L6 8.1l-2.8 1.4.5-3.1L1.5 4.2l3.1-.4z" />
+        </svg>
+      ))}
+    </div>
+  );
+}
 
 function RatingsSection({
   product,
@@ -487,83 +587,119 @@ function RatingsSection({
   const specs = parseTyreProductName(product.name);
   const brandName = String(product.brandName ?? product.brand ?? "").toUpperCase();
   const patternName = (specs.pattern ?? "").toUpperCase();
-  const isMotorcycle = isMotorcycleProduct(product);
   const displayTitle = [brandName, patternName].filter(Boolean).join(" ") || product.name.toUpperCase();
+
+  // Real reviews (first page already came with the product); "Load more"
+  // fetches additional real pages via page_info.total_pages — never
+  // fabricated beyond what Magento actually has.
+  const [reviews, setReviews] = useState(product.reviews.items);
+  const [currentPage, setCurrentPage] = useState(product.reviews.currentPage);
+  const [totalPages, setTotalPages] = useState(product.reviews.totalPages);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setReviews(product.reviews.items);
+    setCurrentPage(product.reviews.currentPage);
+    setTotalPages(product.reviews.totalPages);
+  }, [product.sku, product.reviews]);
+
+  async function loadMoreReviews() {
+    if (loadingMore || currentPage >= totalPages || !product.sku) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const res = await fetch(`/api/product/reviews?sku=${encodeURIComponent(product.sku)}&page=${nextPage}`);
+      const data = await res.json();
+      if (data.reviews) {
+        setReviews((prev) => [...prev, ...data.reviews.items]);
+        setCurrentPage(data.reviews.currentPage);
+        setTotalPages(data.reviews.totalPages);
+      }
+    } catch {
+      // Real reviews just don't extend this time — no fabricated page shown.
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <div>
       {/* ── Header ──────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between pb-4 mb-5"
-        style={{ borderBottom: `2px solid ${DR_MAGENTA}` }}
-      >
+      <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-gray-900">
         <h2 className="text-lg sm:text-xl font-black uppercase tracking-wider text-gray-900">
           RATINGS &amp; REVIEWS
         </h2>
-        {/* driverreviews logo */}
-        <div className="text-right leading-tight">
-          <p className="text-[10px] text-gray-400">Powered by</p>
-          <p className="font-black text-[17px] tracking-tight text-gray-900">
-            driver<span style={{ color: DR_MAGENTA }}>reviews</span>
-          </p>
+      </div>
+
+      {/* ── Review count line ────────────────────────────────── */}
+      <p className="text-[15px] font-black uppercase text-gray-900 mb-1">
+        THERE {count === 1 ? "IS" : "ARE"}{" "}
+        <span className="text-[#ed1c24]">{count}</span>{" "}
+        {count === 1 ? "REVIEW" : "REVIEWS"} OF THE{" "}
+        <span className="text-[#ed1c24]">{displayTitle}</span>
+      </p>
+
+      <div className="border-t border-gray-200 pt-5">
+        <p className="text-[14px] font-semibold text-gray-700 mb-3">Overall rating</p>
+
+        {/* ── Overall rating box ───────────────────────────── */}
+        <div className="border border-gray-200 rounded-sm px-4 py-3 flex items-center gap-2 mb-6">
+          <ReviewStars rating={count > 0 ? rating : 0} size={22} />
+          <span className="text-xl font-black text-gray-900 ml-1">
+            {count > 0 ? `${rating.toFixed(1)}/5` : "Not rated yet"}
+          </span>
+        </div>
+
+        {/* ── Write a Review CTA — jumps to the form below ─────── */}
+        <div className="flex justify-center mb-2">
+          <button
+            type="button"
+            onClick={onWriteReviewClick}
+            className="btn-slide-black text-[14px] font-bold px-14 py-3 rounded-md"
+          >
+            <span>Write a Review</span>
+          </button>
         </div>
       </div>
 
-        {/* ── Review count line ────────────────────────────────── */}
-        <p className="text-[15px] font-black uppercase text-gray-900 mb-1">
-          THERE ARE{" "}
-          <span style={{ color: DR_MAGENTA }}>{count}</span>{" "}
-          REVIEWS OF THE{" "}
-          <span style={{ color: DR_MAGENTA }}>{displayTitle}</span>
-        </p>
-        <p className="text-[13px] text-gray-500 mb-5">
-          {count} total ratings, with {count} review comments
-        </p>
-
-        <div className="border-t border-gray-200 pt-5">
-          <p className="text-[14px] font-semibold text-gray-700 mb-3">Overall rating</p>
-
-          {/* ── Overall rating box ───────────────────────────── */}
-          <div className="border border-gray-200 rounded-sm px-4 py-3 flex items-center gap-2 mb-6">
-            {[1, 2, 3, 4, 5].map(i => (
-              <svg
-                key={i}
-                width="22"
-                height="22"
-                viewBox="0 0 12 12"
-                fill={count > 0 && i <= Math.round(rating) ? DR_MAGENTA : "#E5E7EB"}
+      {/* ── Existing reviews — real Magento data, clean empty state ── */}
+      <div className="border-t border-gray-200 pt-5 mt-5">
+        {reviews.length === 0 ? (
+          <p className="text-[13px] text-gray-500 text-center py-6">
+            No reviews yet. Be the first to review this product.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {reviews.map((r, idx) => (
+              <div
+                key={`${r.nickname}-${r.createdAt}-${idx}`}
+                className="border-b border-gray-100 pb-5 last:border-b-0 last:pb-0"
               >
-                <path d="M6 1l1.4 2.8 3.1.4-2.2 2.2.5 3.1L6 8.1l-2.8 1.4.5-3.1L1.5 4.2l3.1-.4z" />
-              </svg>
+                <div className="flex items-center justify-between mb-1.5 gap-3">
+                  <span className="text-[13px] font-bold text-gray-900">{r.nickname || "Anonymous"}</span>
+                  <span className="text-[11px] text-gray-400 shrink-0">{formatReviewDate(r.createdAt)}</span>
+                </div>
+                <ReviewStars rating={r.averageRating} />
+                {r.summary && <p className="text-[13.5px] font-bold text-gray-900 mt-2">{r.summary}</p>}
+                {r.text && <p className="text-[13px] text-gray-600 mt-1 leading-relaxed">{r.text}</p>}
+              </div>
             ))}
-            <span className="text-xl font-black text-gray-900 ml-1">
-              {count > 0 ? `${rating.toFixed(1)}/5` : "Not rated yet"}
-            </span>
-          </div>
 
-          {/* ── Write a Review CTA — jumps to the form below ─────── */}
-          <div className="flex justify-center mb-5">
-            <button
-              type="button"
-              onClick={onWriteReviewClick}
-              className="btn-slide-black text-[14px] font-bold px-14 py-3 rounded-md"
-            >
-              <span>Write a Review</span>
-            </button>
+            {currentPage < totalPages && (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={loadMoreReviews}
+                  disabled={loadingMore}
+                  className="text-[13px] font-bold text-gray-700 hover:text-[#ed1c24] transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingMore ? "Loading…" : "Load more reviews"}
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* ── Footer disclaimer ────────────────────────────────── */}
-        <div className="bg-gray-50 border border-gray-100 px-4 py-3 text-[13px] text-gray-600 rounded-sm">
-          If you purchased this product but did not receive a tyre review email,{" "}
-          <button type="button" className="hover:underline" style={{ color: DR_MAGENTA }}>
-            contact us
-          </button>.{" "}
-          <button type="button" className="hover:underline" style={{ color: DR_MAGENTA }}>
-            Learn more
-          </button>{" "}
-          about how DriverReviews moderates reviews.
-        </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -610,7 +746,7 @@ type ProductTabKey = "overview" | "reviews";
 
 const PRODUCT_TABS: { key: ProductTabKey; label: string }[] = [
   { key: "overview", label: "Details" },
-  { key: "reviews", label: "Reviews" },
+  // { key: "reviews", label: "Reviews" },
 ];
 
 function ProductInfoTabs({
@@ -649,11 +785,21 @@ function ProductInfoTabs({
       <div>
         {activeTab === "overview" && <OverviewTabContent product={product} />}
 
+        {/* Reviews temporarily commented out
         {activeTab === "reviews" && (
-          <div>
+          <div className="space-y-6">
+            <div className="bg-white border border-gray-200/80 rounded-sm p-6 sm:p-8">
+              <RatingsSection
+                product={product}
+                onWriteReviewClick={() =>
+                  document.getElementById("write-review")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              />
+            </div>
             <WriteReviewCard product={product} />
           </div>
         )}
+        */}
       </div>
     </div>
   );
@@ -840,6 +986,7 @@ export default function ProductDetailInner({
       availability:
         product.inStock === false ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
     },
+    /*
     ...(product.rating && product.reviewCount
       ? {
         aggregateRating: {
@@ -849,6 +996,7 @@ export default function ProductDetailInner({
         },
       }
       : {}),
+    */
   };
 
   return (

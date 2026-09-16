@@ -24,7 +24,21 @@ const CART_RESPONSE = `
       price_including_tax { value currency }
       row_total_including_tax { value currency }
     }
-    product { name sku url_key thumbnail { url label } }
+    product {
+      name
+      sku
+      url_key
+      thumbnail { url label }
+      kleverQtyOptions {
+        salable_qty
+        max_qty
+        default_qty
+        options
+        can_add_to_cart
+        parts_category
+        unit_price
+      }
+    }
   }
 `;
 
@@ -69,6 +83,7 @@ export const CART_MUTATIONS = {
         cart_items: [{ cart_item_uid: $uid, quantity: $qty }]
       }
     ) {
+      errors { message code }
       cart { ${CART_RESPONSE} }
     }
   }`,
@@ -502,6 +517,17 @@ export const MISC_MUTATIONS = {
   contactUs: `mutation ContactUs($input: ContactUsInput!) {
     contactUs(input: $input) {
       status
+    }
+  }`,
+
+  // kleverRequestCallback (Klever module) — dedicated "Request a Callback"
+  // enquiry, distinct from the general contactUs form. Only takes
+  // name/number — saves to Magento's own admin enquiry grid (enquiry_id).
+  requestCallback: `mutation KleverRequestCallback($input: KleverRequestCallbackInput!) {
+    kleverRequestCallback(input: $input) {
+      success
+      message
+      enquiry_id
     }
   }`,
 

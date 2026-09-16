@@ -12,12 +12,14 @@ export async function GET(req: NextRequest) {
   const pageSize = Number(searchParams.get("pageSize") ?? 4);
   const currentPage = Number(searchParams.get("currentPage") ?? 1);
   const category = searchParams.get("category") ?? undefined;
+  const search = searchParams.get("search") ?? undefined;
   const locale = searchParams.get("locale") === "ar" ? "ar" : "en";
 
   const { posts, total } = await getBlogPosts({
     pageSize,
     currentPage,
     categoryUrlKey: category,
+    search,
     store: storeCode(locale),
   });
 

@@ -70,6 +70,16 @@ export interface GqlProduct {
     promo_discount_amount?: string | number | null;
     promo_discount_step?: string | number | null;
   } | null;
+  /** Real per-SKU quantity constraints (Klever module) — drives every
+      quantity selector; no local fixed list substitutes for `options`. */
+  kleverQtyOptions?: {
+    salable_qty?: number | null;
+    max_qty?: number | null;
+    default_qty?: number | null;
+    options?: number[] | null;
+    can_add_to_cart?: boolean | null;
+    parts_category?: string | null;
+  } | null;
 
   image?: GqlImage | null;
   small_image?: GqlImage | null;
@@ -93,14 +103,6 @@ export interface GqlProduct {
 
   rating_summary?: number | null;
   review_count?: number | null;
-
-  driver_reviews?: {
-    is_tyre?: boolean | null;
-    manufacturer?: string | null;
-    model?: string | null;
-    tyre_size?: string | null;
-    vehicle_type?: string | null;
-  } | null;
 }
 
 export interface GqlAggregationOption {
@@ -196,7 +198,7 @@ function resolvePrices(p: GqlProduct): [number, number | undefined, number | und
 /** kleverSetPricing's numeric fields come back as display strings,
     inconsistently formatted (seen: "1800.00" alongside "3,600.00" in the
     same response) — strip any thousands separators before parsing. */
-function parseSetPrice(v: string | number | null | undefined): number | undefined {
+export function parseSetPrice(v: string | number | null | undefined): number | undefined {
   if (v == null) return undefined;
   const n = typeof v === "number" ? v : parseFloat(v.replace(/,/g, ""));
   return Number.isFinite(n) ? n : undefined;
@@ -316,22 +318,22 @@ export function adaptGqlProduct(p: GqlProduct): Product {
 
     offersId: p.offers != null ? String(p.offers) : undefined,
     setPricing: resolveSetPricing(p),
+    qtyOptions: p.kleverQtyOptions
+      ? {
+          salableQty: p.kleverQtyOptions.salable_qty ?? undefined,
+          maxQty: p.kleverQtyOptions.max_qty ?? undefined,
+          defaultQty: p.kleverQtyOptions.default_qty ?? undefined,
+          options: p.kleverQtyOptions.options ?? undefined,
+          canAddToCart: p.kleverQtyOptions.can_add_to_cart ?? undefined,
+          partsCategory: p.kleverQtyOptions.parts_category ?? undefined,
+        }
+      : undefined,
 
     badge: originalPrice ? "Sale" : undefined,
     rating: resolveRating(p),
     reviewCount: Number(p.review_count ?? 0),
     inStock: p.stock_status == null ? undefined : p.stock_status === "IN_STOCK",
     quantity: p.quantity != null ? Number(p.quantity) : undefined,
-
-    driverReviews: p.driver_reviews
-      ? {
-          isTyre: !!p.driver_reviews.is_tyre,
-          manufacturer: p.driver_reviews.manufacturer ?? "",
-          model: p.driver_reviews.model ?? "",
-          tyreSize: p.driver_reviews.tyre_size ?? "",
-          vehicleType: p.driver_reviews.vehicle_type ?? "",
-        }
-      : undefined,
   };
 }
 
@@ -405,13 +407,45 @@ export function parseAggregations(data: unknown, totalCount?: number): FilterGro
 }
 
 
+interface GqlProductReviewItem {
+  nickname?: string | null;
+  summary?: string | null;
+  text?: string | null;
+  average_rating?: number | null;
+  created_at?: string | null;
+}
+
+export interface GqlProductReviews {
+  items?: GqlProductReviewItem[] | null;
+  page_info?: { current_page?: number | null; page_size?: number | null; total_pages?: number | null } | null;
+}
+
 interface GqlProductDetailItem extends GqlProduct {
   media_gallery?: Array<{ url?: string | null; label?: string | null }> | null;
+  reviews?: GqlProductReviews | null;
 }
 
 export interface GqlProductDetailResponse {
   data?: { products?: { items?: GqlProductDetailItem[] } | null };
   errors?: Array<{ message: string }>;
+}
+
+/** A single real customer review (from ProductInterface.reviews.items) — no
+    per-review fields are ever fabricated; if Magento has no reviews for a
+    SKU, `ProductDetail.reviews.items` is simply an empty array. */
+export interface ProductReviewItem {
+  nickname: string;
+  summary: string;
+  text: string;
+  averageRating: number;
+  createdAt: string;
+}
+
+export interface ProductReviewsData {
+  items: ProductReviewItem[];
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ProductDetail extends Product {
@@ -421,6 +455,28 @@ export interface ProductDetail extends Product {
       (bikeTyreType) by product.service.ts once it has network access. */
   bikeTyreTypeId?: string;
   bikeTyreType?: string;
+  /** Real reviews (first page, pageSize 10) from Magento's own
+      ProductInterface.reviews — see lib/services/product.service.ts's
+      getProductReviewsPage() for fetching additional pages. */
+  reviews: ProductReviewsData;
+}
+
+export function mapReviews(raw: GqlProductReviews | null | undefined): ProductReviewsData {
+  const items = (raw?.items ?? [])
+    .filter((r): r is GqlProductReviewItem => !!r)
+    .map((r) => ({
+      nickname: r.nickname ?? "",
+      summary: r.summary ?? "",
+      text: r.text ?? "",
+      averageRating: Number(r.average_rating ?? 0),
+      createdAt: r.created_at ?? "",
+    }));
+  return {
+    items,
+    currentPage: raw?.page_info?.current_page ?? 1,
+    pageSize: raw?.page_info?.page_size ?? items.length,
+    totalPages: raw?.page_info?.total_pages ?? (items.length ? 1 : 0),
+  };
 }
 
 export function parseProductDetail(data: unknown): ProductDetail | null {
@@ -440,6 +496,7 @@ export function parseProductDetail(data: unknown): ProductDetail | null {
     gallery: gallery.length ? gallery : [{ url: mainImage, label: item.name ?? "" }],
     discountPercent: min?.discount?.percent_off ? Math.round(min.discount.percent_off) : undefined,
     bikeTyreTypeId: item.bike_tyre_type != null ? String(item.bike_tyre_type) : undefined,
+    reviews: mapReviews(item.reviews),
   };
 }
 

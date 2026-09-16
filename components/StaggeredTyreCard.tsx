@@ -72,10 +72,15 @@ function BrandLogoDisplay({ brandLabel, brandLogo }: { brandLabel: string; brand
 /** Single Tyre Half Column inside the Staggered Card */
 function TyreHalfColumn({
   product,
+  set2Price,
   locale,
   onOpenFitment,
 }: {
   product: Product;
+  /** Real set2_price for this side from Klever's kleverTyreBundles — falls
+      back to unitPrice*2 only if the bundle API didn't return one for this
+      SKU, since that's still a real per-unit price, not a fabricated number. */
+  set2Price?: number;
   locale: Locale;
   onOpenFitment: () => void;
 }) {
@@ -93,7 +98,7 @@ function TyreHalfColumn({
   const brandHref = brandSlug ? `/${locale}/tyres/brand/${brandSlug}` : null;
 
   const unitPrice = product.price > 0 ? product.price : 0;
-  const set2Price = unitPrice * 2;
+  const resolvedSet2Price = set2Price ?? (unitPrice * 2);
 
   const [priceInfoOpen, setPriceInfoOpen] = useState(false);
 
@@ -177,7 +182,7 @@ function TyreHalfColumn({
           <Money value={unitPrice} digits={2} />
         </div>
         <div className="text-[11.5px] font-bold text-gray-700">
-          Set of 2: <Money value={set2Price} digits={2} />
+          Set of 2: <Money value={resolvedSet2Price} digits={2} />
         </div>
       </div>
 
@@ -192,10 +197,21 @@ function TyreHalfColumn({
 export default function StaggeredTyreCard({
   frontProduct,
   rearProduct,
+  bundlePrice,
+  frontSet2Price,
+  rearSet2Price,
   locale = "en",
 }: {
   frontProduct: Product;
   rearProduct: Product;
+  /** Real combined price from Klever's kleverTyreBundles — the source of
+      truth for this pairing in the first place, so it's expected whenever
+      a pair reaches this card. Falls back to unitPrice*2+unitPrice*2 (still
+      real per-unit prices, not a fabricated number) only if it's ever
+      missing. */
+  bundlePrice?: number;
+  frontSet2Price?: number;
+  rearSet2Price?: number;
   locale?: Locale;
 }) {
   const { addItem } = useCart();
@@ -206,7 +222,7 @@ export default function StaggeredTyreCard({
 
   const frontPrice = frontProduct.price > 0 ? frontProduct.price : 0;
   const rearPrice = rearProduct.price > 0 ? rearProduct.price : 0;
-  const setOf4Price = (frontPrice * 2) + (rearPrice * 2);
+  const setOf4Price = bundlePrice ?? ((frontPrice * 2) + (rearPrice * 2));
 
   const isOutOfStock =
     frontProduct.inStock === false ||
@@ -244,11 +260,13 @@ export default function StaggeredTyreCard({
         <div className="grid grid-cols-2 divide-x divide-gray-200 flex-1">
           <TyreHalfColumn
             product={frontProduct}
+            set2Price={frontSet2Price}
             locale={locale}
             onOpenFitment={() => setActiveFitmentProduct(frontProduct)}
           />
           <TyreHalfColumn
             product={rearProduct}
+            set2Price={rearSet2Price}
             locale={locale}
             onOpenFitment={() => setActiveFitmentProduct(rearProduct)}
           />
