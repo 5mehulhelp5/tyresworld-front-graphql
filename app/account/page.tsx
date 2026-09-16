@@ -15,7 +15,7 @@ import type { Product } from "@/lib/data";
 import DynamicAddressForm from "@/components/account/address";
 import { Money } from "@/components/Price";
 
-type Tab = "dashboard" | "orders" | "wishlist" | "addresses" | "profile";
+type Tab = "dashboard" | "orders" | "wishlist" | "addresses" | "profile" | "vault" | "reviews";
 
 /* ─────────────────────────────────────────────────────────────────
    LOGIN / REGISTER PANEL (logged-out state)
@@ -60,7 +60,7 @@ function AuthPanel() {
       </div>
 
       {/* ── Cards ── */}
-      <div className="container max-w-6xl mx-auto px-4 py-10">
+      <div className="container max-w-6xl mx-auto px-4 pt-6 pb-12">
 
         {/* Error */}
         {error && (
@@ -286,13 +286,13 @@ function FormatAddress({ address }: { address: any }) {
 function AccountDashboard() {
   const { customer, logout, busy, refresh } = useAuth();
   const { addItem } = useCart();
-  const { wishlistItems, removeFromWishlist, moveToCart } = useWishlist();
+  const { wishlistItems, removeFromWishlist, moveToCart, loading: wishlistLoading } = useWishlist();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const locale = pathname?.split("/")[1] === "ar" ? "ar" : "en";
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams.get("tab") as Tab;
-    if (t && ["dashboard", "orders", "wishlist", "addresses", "profile"].includes(t)) {
+    if (t && ["dashboard", "orders", "wishlist", "addresses", "profile", "vault", "reviews"].includes(t)) {
       return t;
     }
     return "dashboard";
@@ -300,10 +300,80 @@ function AccountDashboard() {
 
   useEffect(() => {
     const t = searchParams.get("tab") as Tab;
-    if (t && ["dashboard", "orders", "wishlist", "addresses", "profile"].includes(t)) {
+    if (t && ["dashboard", "orders", "wishlist", "addresses", "profile", "vault", "reviews"].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
+
+  // Payment tokens (Vault) dynamic state
+  const [paymentTokens, setPaymentTokens] = useState<any[]>([]);
+  const [paymentTokensLoading, setPaymentTokensLoading] = useState(false);
+  const [deletingTokenHash, setDeletingTokenHash] = useState<string | null>(null);
+
+  // Reviews dynamic state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "vault") {
+      setPaymentTokensLoading(true);
+      const token = localStorage.getItem("customer_token");
+      fetch("/api/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "paymentTokens", token }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          setPaymentTokens(data.tokens || []);
+          setPaymentTokensLoading(false);
+        })
+        .catch(() => {
+          setPaymentTokens([]);
+          setPaymentTokensLoading(false);
+        });
+    } else if (activeTab === "reviews") {
+      setReviewsLoading(true);
+      const token = localStorage.getItem("customer_token");
+      fetch("/api/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "reviews", token }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          setReviews(data.reviews || []);
+          setReviewsLoading(false);
+        })
+        .catch(() => {
+          setReviews([]);
+          setReviewsLoading(false);
+        });
+    }
+  }, [activeTab]);
+
+  async function handleDeletePaymentToken(publicHash: string) {
+    if (!confirm("Are you sure you want to delete this payment method?")) return;
+    setDeletingTokenHash(publicHash);
+    try {
+      const token = localStorage.getItem("customer_token");
+      const res = await fetch("/api/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "deletePaymentToken", token, publicHash }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        setPaymentTokens((prev) => prev.filter((t) => t.public_hash !== publicHash));
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to delete payment method.");
+    } finally {
+      setDeletingTokenHash(null);
+    }
+  }
 
   // Address management state
   const [addressMode, setAddressMode] = useState<"list" | "create" | "edit">("list");
@@ -461,7 +531,7 @@ function AccountDashboard() {
   const defaultShippingAddress = customer.addresses?.find((a) => a.default_shipping);
 
   return (
-    <div className="bg-white min-h-screen py-10 lg:py-16">
+    <div className="bg-white py-8 lg:py-10">
       <div className="container max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr] gap-8 items-start">
           {/* Sidebar */}
@@ -485,7 +555,13 @@ function AccountDashboard() {
 
             <div className="flex flex-col gap-3.5 pt-6 border-t border-gray-200">
               <button
-                onClick={() => { setActiveTab("addresses"); setSelectedOrderNumber(null); }}
+                onClick={() => {
+                  const targetAddr = defaultBillingAddress || defaultShippingAddress || customer.addresses?.[0] || null;
+                  setEditingAddress(targetAddr);
+                  setAddressMode(targetAddr ? "edit" : "create");
+                  setActiveTab("addresses");
+                  setSelectedOrderNumber(null);
+                }}
                 className={`text-left text-sm transition-colors ${activeTab === "addresses" ? "text-[#ed1c24] font-bold" : "text-gray-700 hover:text-black font-medium"
                   }`}
               >
@@ -497,6 +573,23 @@ function AccountDashboard() {
                   }`}
               >
                 Account Information
+              </button>
+              <button
+                onClick={() => { setActiveTab("vault"); setSelectedOrderNumber(null); }}
+                className={`text-left text-sm transition-colors ${activeTab === "vault" ? "text-[#ed1c24] font-bold" : "text-gray-700 hover:text-black font-medium"
+                  }`}
+              >
+                Stored Payment Methods
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3.5 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => { setActiveTab("reviews"); setSelectedOrderNumber(null); }}
+                className={`text-left text-sm transition-colors ${activeTab === "reviews" ? "text-[#ed1c24] font-bold" : "text-gray-700 hover:text-black font-medium"
+                  }`}
+              >
+                My Product Reviews
               </button>
             </div>
 
@@ -512,7 +605,7 @@ function AccountDashboard() {
           </aside>
 
           {/* Content Box */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8 min-h-[480px]">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8">
             {/* Dashboard tab */}
             {activeTab === "dashboard" && (
               <div>
@@ -561,7 +654,12 @@ function AccountDashboard() {
                       Address Book
                     </h2>
                     <button
-                      onClick={() => setActiveTab("addresses")}
+                      onClick={() => {
+                        const targetAddr = defaultBillingAddress || defaultShippingAddress || customer.addresses?.[0] || null;
+                        setEditingAddress(targetAddr);
+                        setAddressMode(targetAddr ? "edit" : "create");
+                        setActiveTab("addresses");
+                      }}
                       className="border border-gray-300 hover:bg-gray-50 text-gray-800 px-3.5 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
                     >
                       Manage Addresses
@@ -586,7 +684,11 @@ function AccountDashboard() {
                         )}
                         <div className="pt-4 border-t border-gray-100">
                           <button
-                            onClick={() => setActiveTab("addresses")}
+                            onClick={() => {
+                              setEditingAddress(defaultBillingAddress || null);
+                              setAddressMode(defaultBillingAddress ? "edit" : "create");
+                              setActiveTab("addresses");
+                            }}
                             className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
                           >
                             Edit Address
@@ -612,7 +714,11 @@ function AccountDashboard() {
                         )}
                         <div className="pt-4 border-t border-gray-100">
                           <button
-                            onClick={() => setActiveTab("addresses")}
+                            onClick={() => {
+                              setEditingAddress(defaultShippingAddress || null);
+                              setAddressMode(defaultShippingAddress ? "edit" : "create");
+                              setActiveTab("addresses");
+                            }}
                             className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
                           >
                             Edit Address
@@ -621,36 +727,6 @@ function AccountDashboard() {
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Recent Orders */}
-                <div>
-                  <div className="flex items-center justify-between border-b border-gray-200 pb-2.5 mb-4">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-gray-900">
-                      Recent Orders
-                    </h2>
-                    <button
-                      onClick={() => setActiveTab("orders")}
-                      className="border border-gray-300 hover:bg-gray-50 text-gray-800 px-3.5 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
-                    >
-                      View All
-                    </button>
-                  </div>
-                  {orders.length === 0 ? (
-                    <p className="text-sm text-gray-500 py-4">You have placed no orders.</p>
-                  ) : (
-                    <OrdersList
-                      orders={orders}
-                      money={money}
-                      token={localStorage.getItem("customer_token")}
-                      limit={5}
-                      onViewOrder={(number) => {
-                        setSelectedOrderNumber(number);
-                        setActiveTab("orders");
-                      }}
-                      customerName={`${customer.firstname} ${customer.lastname}`}
-                    />
-                  )}
                 </div>
               </div>
             )}
@@ -694,10 +770,28 @@ function AccountDashboard() {
             {activeTab === "wishlist" && (
               <div>
                 <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-4 mb-6">
-                  Wishlist
+                  MY WISH LIST
                 </h1>
-                {wishlistItems.length === 0 ? (
-                  <p className="text-sm text-gray-500">Your wishlist is empty.</p>
+                {wishlistLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                  </div>
+                ) : wishlistItems.length === 0 ? (
+                  <div className="flex items-center gap-3 bg-[#fef8e7] border border-[#fbeed5] text-[#8a6d3b] rounded-md px-4 py-3 text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-5 h-5 flex-shrink-0 text-[#c09853]"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-5a1 1 0 00-1 1v2a1 1 0 002 0V9a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>You have no items in your wish list.</span>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {wishlistItems.map((item) => {
@@ -1096,6 +1190,124 @@ function AccountDashboard() {
                 </form>
               </div>
             )}
+
+            {/* Stored Payment Methods tab */}
+            {activeTab === "vault" && (
+              <div>
+                <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-4 mb-6">
+                  STORED PAYMENT METHODS
+                </h1>
+
+                {paymentTokensLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                  </div>
+                ) : paymentTokens.length === 0 ? (
+                  <div className="flex items-center gap-3 bg-[#fef8e7] border border-[#fbeed5] text-[#8a6d3b] rounded-md px-4 py-3 text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-5 h-5 flex-shrink-0 text-[#c09853]"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-5a1 1 0 00-1 1v2a1 1 0 002 0V9a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>You have no stored payment methods.</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <thead>
+                        <tr className="bg-[#f8f9fa] border-b border-gray-200">
+                          <th className="text-left text-[11px] font-black uppercase tracking-wider text-gray-700 px-4 py-3">Card Number</th>
+                          <th className="text-left text-[11px] font-black uppercase tracking-wider text-gray-700 px-4 py-3">Expiration Date</th>
+                          <th className="text-left text-[11px] font-black uppercase tracking-wider text-gray-700 px-4 py-3">Type</th>
+                          <th className="text-right text-[11px] font-black uppercase tracking-wider text-gray-700 px-4 py-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paymentTokens.map((token) => {
+                          let details: any = {};
+                          try {
+                            details = typeof token.details === "string" ? JSON.parse(token.details) : token.details || {};
+                          } catch (_) {}
+                          const maskedCC = details.maskedCC || details.cardNumber || "****";
+                          const expDate = details.expirationDate || details.expiration || (details.month && details.year ? `${details.month}/${details.year}` : "—");
+                          const cardType = details.type || token.type || token.payment_method_code || "Card";
+
+                          return (
+                            <tr key={token.public_hash} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-4 py-3 font-mono text-gray-800">
+                                Ending in {maskedCC.slice(-4)}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{expDate}</td>
+                              <td className="px-4 py-3 uppercase text-xs font-semibold text-gray-700">{cardType}</td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  disabled={deletingTokenHash === token.public_hash}
+                                  onClick={() => handleDeletePaymentToken(token.public_hash)}
+                                  className="text-xs font-bold text-red-600 hover:text-red-800 uppercase tracking-wider disabled:opacity-50"
+                                >
+                                  {deletingTokenHash === token.public_hash ? "Deleting…" : "Delete"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* My Product Reviews tab */}
+            {activeTab === "reviews" && (
+              <div>
+                <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-4 mb-6">
+                  MY PRODUCT REVIEWS
+                </h1>
+
+                {reviewsLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <div className="flex items-center gap-3 bg-[#fef8e7] border border-[#fbeed5] text-[#8a6d3b] rounded-md px-4 py-3 text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-5 h-5 flex-shrink-0 text-[#c09853]"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-5a1 1 0 00-1 1v2a1 1 0 002 0V9a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>You have submitted no reviews.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {reviews.map((rev, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-5">
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <h3 className="font-bold text-gray-900 text-sm">{rev.product?.name || "Product"}</h3>
+                          <span className="text-xs text-gray-500">{rev.created_at ? new Date(rev.created_at).toLocaleDateString() : ""}</span>
+                        </div>
+                        {rev.summary && <p className="font-semibold text-gray-800 text-sm mb-1">{rev.summary}</p>}
+                        {rev.text && <p className="text-sm text-gray-600 leading-relaxed">{rev.text}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1486,7 +1698,7 @@ function OrdersList({
 ───────────────────────────────────────────────────────────────── */
 function AccountPageSkeleton() {
   return (
-    <div className="bg-white min-h-screen py-10 lg:py-16">
+    <div className="bg-white py-8 lg:py-10">
       <div className="container max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr] gap-8 items-start">
           {/* Sidebar Skeleton */}
@@ -1498,6 +1710,10 @@ function AccountPageSkeleton() {
             <div className="flex flex-col gap-4 pt-6 border-t border-gray-200">
               <div className="h-4 bg-gray-200 rounded w-3/4" />
               <div className="h-4 bg-gray-200 rounded w-2/3" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+            </div>
+            <div className="flex flex-col gap-4 pt-6 border-t border-gray-200">
+              <div className="h-4 bg-gray-200 rounded w-2/3" />
             </div>
             <div className="pt-6 border-t border-gray-200">
               <div className="h-4 bg-gray-200 rounded w-1/3" />
@@ -1505,7 +1721,7 @@ function AccountPageSkeleton() {
           </div>
 
           {/* Content Skeleton */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8 min-h-[480px] animate-pulse">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8 animate-pulse">
             <div className="h-7 bg-gray-200 rounded w-1/4 mb-6" />
             <div className="space-y-6">
               <div className="h-4 bg-gray-200 rounded w-3/4" />

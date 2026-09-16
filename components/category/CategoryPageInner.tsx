@@ -10,6 +10,7 @@ import StaggeredTyreCard from "@/components/StaggeredTyreCard";
 import TyreFinder from "@/components/TyreFinder";
 import StickyBottomFinder from "@/components/home/partora/StickyBottomFinder";
 import CategorySeoSection from "@/components/CategorySeoSection";
+import TyreGuideSeoContent from "@/components/TyreGuideSeoContent";
 import CategoryFaqSection, { type FaqItem } from "@/components/CategoryFaqSection";
 import { storeCode, type Locale } from "@/lib/i18n";
 import FilterPanel, { type FilterGroup } from "@/components/FilterPanel";
@@ -199,9 +200,21 @@ export default function CategoryPageInner({
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterGroups, setFilterGroups] = useState<FilterGroup[]>([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
-  const [selected, setSelected] = useState<Record<string, string[]>>({});
+  /* Lazily seeded from the URL on first render (not an empty object then
+     patched in a follow-up effect) — otherwise the very first product
+     request fires with zero filters before this hydrates, so the page
+     flashes the full unfiltered listing before the real, URL-scoped one
+     replaces it a moment later. */
+  const [selected, setSelected] = useState<Record<string, string[]>>(() => {
+    const initial: Record<string, string[]> = {};
+    for (const [key, val] of searchParams.entries()) {
+      if (SYSTEM_PARAMS.has(key)) continue;
+      if (val) initial[key] = val.split(",").filter(Boolean);
+    }
+    return initial;
+  });
 
-  // Sync URL searchParams to selected state on mount and when query changes
+  // Sync URL searchParams to selected state when the query changes after mount.
   useEffect(() => {
     const initial: Record<string, string[]> = {};
     for (const [key, val] of searchParams.entries()) {
@@ -265,28 +278,39 @@ export default function CategoryPageInner({
     setLoading(true); setCatLoading(true); setApiError(null);
 
     fetch(url, { cache: "no-store" })
-      .then(r => r.json())
-      .then(j => {
+      .then(async (r) => {
+        const text = await r.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error("Unable to load products. Please refresh and try again.");
+        }
+      })
+      .then((j: {
+        error?: string;
+        category?: CategoryInfo;
+        products?: Product[];
+        total?: number;
+        totalPages?: number;
+        staggered?: {
+          total?: number;
+          totalPages?: number;
+          products?: Product[];
+          rearProducts?: Product[];
+        } | null;
+        filters?: FilterGroup[];
+      }) => {
         if (requestUrlRef.current !== url) return;
         if (j.error && !j.products?.length) { setApiError(j.error); }
         if (j.category) setCategory(j.category);
-        // /api/category-page now does the real price sort itself (across
-        // the whole category, not just this page) when sort is low-to-high
-        // / high-to-low — Magento's GraphQL schema for this store has no
-        // sortable price field, so re-sorting only this page's 12 items
-        // client-side was cosmetic and could show cheaper items on later
-        // pages than on page 1. `products` already arrives correctly
-        // ordered and paginated.
         const items: Product[] = j.products ?? [];
         setProducts(items);
         setTotal(j.total ?? 0);
         setTotalPages(j.totalPages ?? 1);
 
         if (j.staggered) {
-          // Sort keeps front+rear paired at the same index — re-order both
-          // arrays together by front price rather than sorting independently.
           let pairs: { front: Product; rear: Product }[] = (j.staggered.products ?? []).map(
-            (front: Product, i: number) => ({ front, rear: j.staggered.rearProducts?.[i] }),
+            (front: Product, i: number) => ({ front, rear: j.staggered?.rearProducts?.[i] as Product }),
           );
           if (sort === "high-to-low") pairs = [...pairs].sort((a, b) => (b.front.price ?? 0) - (a.front.price ?? 0));
           else if (sort === "low-to-high") pairs = [...pairs].sort((a, b) => (a.front.price ?? 0) - (b.front.price ?? 0));
@@ -299,19 +323,18 @@ export default function CategoryPageInner({
         } else {
           setStaggered(null);
         }
-        /* Sidebar options ride along on this same response — the listing
-           makes exactly one products request, no second filters call. */
         if (Array.isArray(j.filters)) {
           setFilterGroups(j.filters);
           setFiltersLoading(false);
         }
         setLoading(false); setCatLoading(false);
       })
-      .catch(err => {
+      .catch((err: Error) => {
         if (requestUrlRef.current !== url) return;
-        // Clear the key so the same request can legitimately be retried.
         requestUrlRef.current = null;
-        setApiError(err.message); setLoading(false); setCatLoading(false);
+        setApiError(err.message || "Failed to load products");
+        setLoading(false);
+        setCatLoading(false);
       });
   }, [urlKey, sort, page, store, selected, searchParams]);
 
@@ -731,7 +754,7 @@ export default function CategoryPageInner({
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-5">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <TyreListingCardSkeleton key={i} />)}
             </div>
           ) : apiError ? (
@@ -788,6 +811,7 @@ export default function CategoryPageInner({
 
       {/* ── SEO + FAQ ──────────────────────────────────────────────── */}
       <CategorySeoSection content={cmsContent} loading={cmsLoading} dir={dir} />
+      <TyreGuideSeoContent locale={locale} />
       <CategoryFaqSection faqs={faqs} loading={faqLoading} dir={dir} />
 
       {/* ── Sticky bottom search bar (Same as Homepage) ────────────── */}

@@ -1,346 +1,327 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
-  Mail,
-  Phone,
-  MapPin,
-  Clock,
-  Instagram,
-  Twitter,
-  Youtube,
+  ChevronRight,
   CheckCircle,
-  ArrowRight,
+  Loader2,
 } from "lucide-react";
 
-const contactInfo = [
-  {
-    icon: MapPin,
-    title: "Visit us",
-    lines: ["12 Rue du Faubourg", "75008 Paris, France"],
-  },
-  {
-    icon: Phone,
-    title: "Call us",
-    lines: ["+1 (415) 555-0192", "Mon–Fri, 9am–6pm CET"],
-  },
-  {
-    icon: Mail,
-    title: "Email us",
-    lines: ["hello@maison.co", "We reply within 24h"],
-  },
-  {
-    icon: Clock,
-    title: "Opening hours",
-    lines: ["Mon–Fri: 9:00 – 18:00", "Sat: 10:00 – 15:00"],
-  },
-];
-
-const subjects = [
-  "Order Enquiry",
-  "Product Question",
-  "Returns & Refunds",
-  "Press & Media",
-  "Wholesale",
-  "Other",
-];
-
-type FormData = {
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-};
-
-type Errors = Partial<Record<keyof FormData, string>>;
-
 export default function ContactPage() {
-  const [form, setForm] = useState<FormData>({
-    name: "",
-    email: "",
-    subject: "",
-    message: "",
-  });
-  const [errors, setErrors] = useState<Errors>({});
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-
-  function validate(): boolean {
-    const e: Errors = {};
-    if (!form.name.trim()) e.name = "Your name is required.";
-    if (!form.email.trim()) {
-      e.email = "Your email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      e.email = "Please enter a valid email address.";
-    }
-    if (!form.subject) e.subject = "Please select a subject.";
-    if (!form.message.trim()) {
-      e.message = "A message is required.";
-    } else if (form.message.trim().length < 10) {
-      e.message = "Please write at least 10 characters.";
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-    if (errors[name as keyof FormData]) {
-      setErrors((err) => ({ ...err, [name]: undefined }));
-    }
-  }
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
     setLoading(true);
+    setError("");
+
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          telephone: "",
-          message: `[${form.subject}] ${form.message}`,
+          name: name.trim(),
+          email: email.trim(),
+          telephone: phone.trim(),
+          comment: message.trim(),
         }),
       });
-      const data = (await res.json().catch(() => ({ ok: false }))) as { ok?: boolean };
+
+      const data = (await res.json().catch(() => ({ ok: false }))) as { ok?: boolean; error?: string };
       if (data.ok) {
         setSent(true);
+        setName("");
+        setEmail("");
+        setPhone("");
+        setMessage("");
       } else {
-        setErrors({ message: "Could not send your message. Please try again." });
+        setError(data.error || "Could not send your message. Please try again.");
       }
     } catch {
-      setErrors({ message: "Network error. Please check your connection and try again." });
+      setError("Network error. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <>
-      {/* Header */}
-      <div className="bg-cream py-14 lg:py-20 border-b border-ink/5">
-        <div className="container max-w-3xl">
-          <p className="text-xs text-ink/40 mb-3">
-            <a href="/" className="hover:text-ink transition-colors">Home</a>
-            {" / "}
-            <span className="text-ink">Contact</span>
-          </p>
-          <span className="eyebrow mb-4 block">
-            <span className="w-5 h-px bg-ink-muted" />
-            Get in touch
-          </span>
-          <h1 className="section-title mb-3">We&apos;d love to hear from you</h1>
-          <p className="text-ink/55 text-base max-w-lg">
-            Questions, collaborations, or just want to say hello — our team is
-            here and usually responds within one business day.
-          </p>
+    <div className="bg-white">
+      {/* ── Top Hero Banner with Title ── */}
+      <div className="relative w-full h-32 sm:h-40 md:h-48 bg-black overflow-hidden flex items-center justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/contact-banner.png"
+          alt="Contact Us"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-black/25" />
+        <h1 className="relative z-10 text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-wider drop-shadow-md font-sans">
+          CONTACT US
+        </h1>
+      </div>
+
+      {/* ── Breadcrumb ── */}
+      <div className="bg-[#f0f0f0] border-b border-gray-200">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-2.5">
+          <nav className="flex items-center gap-2 text-xs font-medium text-gray-500">
+            <Link href="/" className="hover:text-black transition-colors">
+              Home
+            </Link>
+            <ChevronRight size={12} className="text-gray-400" />
+            <span className="text-gray-800 font-medium">Contact Us</span>
+          </nav>
         </div>
       </div>
 
-      <div className="container py-14 lg:py-20">
-        <div className="grid lg:grid-cols-[1fr_380px] gap-12 lg:gap-16 max-w-5xl">
-          {/* Form */}
-          <div>
-            {sent ? (
-              <div className="flex flex-col items-start gap-4 py-12">
-                <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
-                  <CheckCircle size={28} className="text-accent" />
+      {/* ── Main Content ── */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 sm:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-start">
+          
+          {/* ── Left Column: Get In Touch Info ── */}
+          <div className="lg:col-span-6 xl:col-span-6">
+            <h2 className="text-2xl sm:text-3xl lg:text-[34px] font-black uppercase tracking-tight text-gray-950 font-sans leading-tight">
+              GET IN TOUCH WITH US – <span className="text-[#ed1c24]">TYRESWORLD.AE</span>
+            </h2>
+
+            <p className="text-xs sm:text-[14px] text-gray-800 leading-relaxed font-normal mt-4 mb-7 max-w-xl">
+              tyresworld.ae is highly rated as an Online Tyre Shop in the UAE, renowned for best tyre prices and outstanding customer service. Join our loyal customer base who rely on us for their tyre needs.
+            </p>
+
+            <div className="space-y-5 mb-8">
+              {/* ADDRESS */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
                 </div>
-                <h2 className="font-display text-3xl text-ink">
-                  Message sent!
-                </h2>
-                <p className="text-ink/55 text-base max-w-md">
-                  Thanks for reaching out, {form.name.split(" ")[0]}. We&apos;ll get
-                  back to you at {form.email} within one business day.
+                <div className="pt-0.5">
+                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
+                    ADDRESS
+                  </h3>
+                  <p className="text-xs sm:text-[13.5px] text-gray-800 leading-snug">
+                    DSP Trade Hub FZ–LLC , Compass Building, Al Shohada Road, AL Hamra<br />
+                    Industrial Zone–FZ, Ras Al Khaimah, UAE
+                  </p>
+                </div>
+              </div>
+
+              {/* WHATSAPP */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+                  </svg>
+                </div>
+                <div className="pt-0.5">
+                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
+                    WHATSAPP
+                  </h3>
+                  <a
+                    href="https://api.whatsapp.com/send/?phone=971505069575&text=Hi%20tyresworld.ae"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs sm:text-[13.5px] text-gray-800 hover:text-[#ed1c24] transition-colors font-medium inline-block"
+                  >
+                    +971 50 506 9575
+                  </a>
+                </div>
+              </div>
+
+              {/* EMAIL */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                  </svg>
+                </div>
+                <div className="pt-0.5">
+                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
+                    EMAIL
+                  </h3>
+                  <a
+                    href="mailto:info@tyresworld.ae"
+                    className="text-xs sm:text-[13.5px] text-gray-800 hover:text-[#ed1c24] transition-colors font-medium inline-block"
+                  >
+                    info@tyresworld.ae
+                  </a>
+                </div>
+              </div>
+
+              {/* HOURS OF OPERATION */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#d52d27] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <svg className="w-5 h-5 fill-none stroke-white stroke-[2.2]" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                </div>
+                <div className="pt-0.5">
+                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-1">
+                    HOURS OF OPERATION
+                  </h3>
+                  <p className="text-xs sm:text-[13.5px] text-gray-800 leading-snug">
+                    Monday to Saturday: 8:30 am – 6:00 pm
+                    <br />
+                    Sunday: Closed
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* FOLLOW US ON */}
+            <div>
+              <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-wide text-gray-950 mb-3">
+                FOLLOW US ON
+              </h3>
+              <div className="flex items-center gap-3">
+                {/* Facebook */}
+                <a
+                  href="https://www.facebook.com/profile.php?id=61565576775985"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="group w-10 h-10 rounded-full bg-[#1877F2] text-white flex items-center justify-center shadow-sm overflow-hidden"
+                >
+                  <svg className="w-4 h-4 fill-current transition-transform duration-500 ease-in-out group-hover:rotate-[360deg]" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                </a>
+
+                {/* Instagram */}
+                <a
+                  href="https://www.instagram.com/tyresworld.ae/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="group w-10 h-10 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white flex items-center justify-center shadow-sm overflow-hidden"
+                >
+                  <svg className="w-4 h-4 fill-current transition-transform duration-500 ease-in-out group-hover:rotate-[360deg]" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Right Column: Send Us A Message Form ── */}
+          <div className="lg:col-span-6 xl:col-span-6 bg-[#ededed] rounded-xl p-6 sm:p-8 lg:p-9 shadow-sm">
+            <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-gray-950 mb-6 font-sans">
+              SEND US A MESSAGE
+            </h2>
+
+            {sent ? (
+              <div className="bg-white border border-green-200 rounded-xl p-6 flex flex-col items-center text-center gap-3">
+                <CheckCircle size={36} className="text-green-600" />
+                <h3 className="text-lg font-bold text-gray-900">Thank you!</h3>
+                <p className="text-sm text-gray-600">
+                  Your message has been sent successfully. Our team will get back to you shortly.
                 </p>
                 <button
-                  onClick={() => { setSent(false); setForm({ name: "", email: "", subject: "", message: "" }); }}
-                  className="btn-secondary text-sm px-6 py-2.5 mt-2"
+                  type="button"
+                  onClick={() => setSent(false)}
+                  className="mt-2 bg-black hover:bg-[#ed1c24] text-white px-6 py-2 rounded text-xs font-bold uppercase tracking-wider transition-colors"
                 >
                   Send another message
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-                <div className="grid sm:grid-cols-2 gap-5">
-                  {/* Name */}
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-md px-4 py-2.5">
+                    {error}
+                  </div>
+                )}
+
+                {/* Name & Email Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1.5 uppercase tracking-wider">
-                      Full name <span className="text-accent">*</span>
+                    <label className="text-xs font-bold text-gray-800 mb-1.5 block">
+                      Name <span className="text-[#ed1c24]">*</span>
                     </label>
                     <input
-                      name="name"
+                      required
                       type="text"
-                      value={form.name}
-                      onChange={handleChange}
-                      placeholder="Jane Smith"
-                      className={`input-field ${errors.name ? "border-red-400 focus:border-red-400" : ""}`}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder=""
+                      className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-gray-400 rounded-md px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none transition-colors"
                     />
-                    {errors.name && (
-                      <p className="text-red-500 text-xs mt-1.5">{errors.name}</p>
-                    )}
                   </div>
 
-                  {/* Email */}
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1.5 uppercase tracking-wider">
-                      Email address <span className="text-accent">*</span>
+                    <label className="text-xs font-bold text-gray-800 mb-1.5 block">
+                      Email <span className="text-[#ed1c24]">*</span>
                     </label>
                     <input
-                      name="email"
+                      required
                       type="email"
-                      value={form.email}
-                      onChange={handleChange}
-                      placeholder="jane@example.com"
-                      className={`input-field ${errors.email ? "border-red-400 focus:border-red-400" : ""}`}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder=""
+                      className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-gray-400 rounded-md px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none transition-colors"
                     />
-                    {errors.email && (
-                      <p className="text-red-500 text-xs mt-1.5">{errors.email}</p>
-                    )}
                   </div>
                 </div>
 
-                {/* Subject */}
+                {/* Phone Number */}
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1.5 uppercase tracking-wider">
-                    Subject <span className="text-accent">*</span>
+                  <label className="text-xs font-bold text-gray-800 mb-1.5 block">
+                    Phone Number
                   </label>
-                  <select
-                    name="subject"
-                    value={form.subject}
-                    onChange={handleChange}
-                    className={`input-field ${errors.subject ? "border-red-400" : ""}`}
-                  >
-                    <option value="">Select a subject…</option>
-                    {subjects.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  {errors.subject && (
-                    <p className="text-red-500 text-xs mt-1.5">{errors.subject}</p>
-                  )}
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="05XXXXXXXX"
+                    className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-gray-400 rounded-md px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none transition-colors placeholder:text-gray-400"
+                  />
                 </div>
 
                 {/* Message */}
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1.5 uppercase tracking-wider">
-                    Message <span className="text-accent">*</span>
+                  <label className="text-xs font-bold text-gray-800 mb-1.5 block">
+                    Message <span className="text-[#ed1c24]">*</span>
                   </label>
                   <textarea
-                    name="message"
-                    value={form.message}
-                    onChange={handleChange}
-                    rows={6}
-                    placeholder="Tell us how we can help…"
-                    className={`input-field resize-none ${errors.message ? "border-red-400 focus:border-red-400" : ""}`}
+                    required
+                    rows={4}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder=""
+                    className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-gray-400 rounded-md px-3.5 py-3 text-sm text-gray-900 focus:outline-none transition-colors resize-none"
                   />
-                  {errors.message && (
-                    <p className="text-red-500 text-xs mt-1.5">{errors.message}</p>
-                  )}
-                  <p className="text-xs text-ink/30 mt-1.5 text-right">
-                    {form.message.length} characters
-                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary text-sm px-8 py-3.5 self-start disabled:opacity-70"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      Sending…
-                    </>
-                  ) : (
-                    <>
-                      Send message <ArrowRight size={15} />
-                    </>
-                  )}
-                </button>
+                {/* Submit Button */}
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="bg-black hover:bg-[#ed1c24] text-white px-8 py-2.5 rounded text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                  >
+                    {loading && <Loader2 size={14} className="animate-spin" />}
+                    <span>{loading ? "SUBMITTING…" : "SUBMIT"}</span>
+                  </button>
+                </div>
               </form>
             )}
           </div>
 
-          {/* Info column */}
-          <div className="flex flex-col gap-5">
-            {contactInfo.map(({ icon: Icon, title, lines }) => (
-              <div key={title} className="bg-cream rounded-2xl p-5 flex gap-4">
-                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-card">
-                  <Icon size={18} className="text-accent" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-ink mb-1.5">
-                    {title}
-                  </p>
-                  {lines.map((l) => (
-                    <p key={l} className="text-sm text-ink/60">{l}</p>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {/* Social */}
-            <div className="bg-ink rounded-2xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/40 mb-4">
-                Follow us
-              </p>
-              <div className="flex gap-2">
-                {[
-                  { Icon: Instagram, label: "Instagram" },
-                  { Icon: Twitter, label: "Twitter" },
-                  { Icon: Youtube, label: "YouTube" },
-                ].map(({ Icon, label }) => (
-                  <a
-                    key={label}
-                    href="#"
-                    aria-label={label}
-                    className="w-9 h-9 rounded-full border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:border-white/30 transition-colors"
-                  >
-                    <Icon size={15} />
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
-
-      {/* Map placeholder */}
-      <div className="h-72 lg:h-96 bg-cream border-y border-ink/5 relative overflow-hidden">
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-            <MapPin size={22} className="text-accent" />
-          </div>
-          <p className="font-semibold text-ink">12 Rue du Faubourg, Paris</p>
-          <a
-            href="https://maps.google.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary text-xs px-5 py-2"
-          >
-            Open in Google Maps
-          </a>
-        </div>
-        {/* Decorative grid */}
-        <svg className="absolute inset-0 w-full h-full opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#0B0B0F" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-    </>
+    </div>
   );
 }

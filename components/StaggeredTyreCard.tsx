@@ -8,7 +8,6 @@ import ProductImage from "./ProductImage";
 import VehicleFitmentModal from "@/components/VehicleFitmentModal";
 import type { Product } from "@/lib/data";
 import { type Locale } from "@/lib/i18n";
-import { getBrandLogo } from "@/lib/brandLogos";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
 import { APP_CONFIG } from "@/src/config/app-config";
@@ -89,7 +88,7 @@ function TyreHalfColumn({
   const warranty = product.warrantyPeriod ?? "";
   const origin = product.country ?? product.origin ?? "";
 
-  const brandLogo = product.brandLogoUrl ?? getBrandLogo(product.brand) ?? getBrandLogo(product.brandName);
+  const brandLogo = product.brandLogoUrl;
   const brandSlug = product.brandName?.toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/(^-|-$)/g, "");
   const brandHref = brandSlug ? `/${locale}/tyres/brand/${brandSlug}` : null;
 

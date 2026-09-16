@@ -168,6 +168,38 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ cart: normalizeCart(raw ?? null), error: err(j) });
       }
 
+      /* ── save installer/fitting selection (Klever module) ────────
+         Mirrors the live storelocator/ajax/saveinstaller controller: writes
+         delivery_mode/pickup_store/pickup_date/pickup_time onto the quote
+         and sets the matching shipping method server-side. */
+      case "setInstallerSelection": {
+        const j = await gql(
+          Q.setInstallerSelection,
+          {
+            input: {
+              cart_id: cartId,
+              delivery_mode: body.deliveryMode,
+              store_id: body.storeId,
+              pickup_location: body.pickupLocation,
+              pickup_date: body.pickupDate,
+              pickup_time: body.pickupTime,
+            },
+          },
+          token,
+        );
+        const r = j.data?.setKleverInstallerSelection as
+          | { success?: boolean; message?: string; subtotal?: string; shipping_amount?: number; shipping_formatted?: string; grand_total?: string }
+          | undefined;
+        return NextResponse.json({ result: r ?? null, error: err(j) });
+      }
+
+      /* ── read back a saved installer/fitting selection ───────── */
+      case "getInstallerSelection": {
+        const j = await gql(Q.getInstallerSelection, { cartId }, token);
+        const r = j.data?.kleverInstallerSelection as Record<string, unknown> | null | undefined;
+        return NextResponse.json({ selection: r ?? null, error: err(j) });
+      }
+
       /* ── set shipping method ─────────────────────────────────── */
       case "setShippingMethod": {
         const j   = await gql(Q.setShippingMethod, { cartId, carrier: body.carrier, method: body.method }, token);
@@ -177,6 +209,10 @@ export async function POST(req: NextRequest) {
 
       /* ── set billing address ────────────────────────────────── */
       case "setBilling": {
+        if (body.sameAsShipping) {
+          const j = await gql(Q.setBillingSameAsShipping, { cartId }, token);
+          return NextResponse.json({ ok: !err(j), error: err(j) });
+        }
         const j = await gql(Q.setBilling, { cartId, addr: body.address }, token);
         return NextResponse.json({ ok: !err(j), error: err(j) });
       }

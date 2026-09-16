@@ -47,6 +47,20 @@ export type Product = {
   // Offers — raw Magento option ID; resolve to label via useOfferLabels()
   offersId?: string;
 
+  /** Real per-set prices from Magento's own pricing/promo rules (Klever
+      module) — use these for a "Set of N" display instead of unitPrice × qty
+      wherever N is 1, 2, or 4; they're only undefined when the query didn't
+      request/return this field or the backend gave no set pricing for a SKU. */
+  setPricing?: {
+    set1?: number;
+    set2?: number;
+    set4?: number;
+    promoLabel?: string;
+    promoBannerUrl?: string;
+    promoDiscountAmount?: number;
+    promoDiscountStep?: number;
+  };
+
   // Meta
   badge?: "New" | "Sale" | "Bestseller";
   rating: number;

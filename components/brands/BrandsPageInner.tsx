@@ -4,51 +4,40 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Search } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
-import TyreFinder from "@/components/TyreFinder";
 import StickyBottomFinder from "@/components/home/partora/StickyBottomFinder";
 
-/** One entry as /api/brands returns it. */
+/** One entry as /api/brands returns it (real Magento kleverBrands data). */
 type Brand = {
   name: string;
   filterValue: string;
   logo: string;
+  category: string;
+  isFeatured: boolean;
+  sortOrder: number;
 };
 
-// Known Battery Brands (both from catalogue & standard inventory)
-const BATTERY_BRAND_NAMES = new Set([
-  "bosch",
-  "dagenite",
-  "duracell",
-  "f-power",
-  "fpower",
-  "fiamm",
-  "solite",
-  "varta",
-  "volcan",
-  "asimco",
-  "acdelco",
-  "amaron",
-  "energizer",
-  "exide",
-  "optima",
-  "yuasa",
-]);
-
-// Dedicated Battery Brands list with verified logo paths
-const BATTERY_BRANDS: Brand[] = [
-  { name: "ACDelco", filterValue: "ACDelco", logo: "/brands/mgs_brand/7/9/79e8bb2b62_1422510267_acdelco-logo_1__1__1_.jpg" },
-  { name: "Amaron", filterValue: "Amaron", logo: "/brands/mgs_brand/a/m/amaron_logo_0.jpg" },
-  { name: "Asimco", filterValue: "Asimco", logo: "/brands/mgs_brand/a/s/asimco_1_.jpg" },
-  { name: "Bosch", filterValue: "Bosch", logo: "/brands/mgs_brand/b/o/bosch_1_.png" },
-  { name: "Dagenite", filterValue: "Dagenite", logo: "/brands/mgs_brand/d/a/dagenite_1_.jpg" },
-  { name: "Duracell", filterValue: "Duracell", logo: "/brands/mgs_brand/d/u/duracell_1_.jpg" },
-  { name: "F-Power", filterValue: "F-Power", logo: "/brands/mgs_brand/f/p/fpower_1_.png" },
-  { name: "Fiamm", filterValue: "Fiamm", logo: "/brands/mgs_brand/f/i/fiamm_1_.jpg" },
-  { name: "Rhino Battery", filterValue: "Rhino", logo: "/brands/mgs_brand/r/h/rhino-battery-shop.png" },
-  { name: "Solite", filterValue: "Solite", logo: "/brands/mgs_brand/s/o/solite_1_.jpg" },
-  { name: "Varta", filterValue: "Varta", logo: "/brands/mgs_brand/v/a/varta_1_.jpg" },
-  { name: "Volcan", filterValue: "Volcan", logo: "/brands/mgs_brand/v/o/volcan_1_.png" },
-];
+/* Real brand_category values (confirmed live) → the real product-listing
+   page each one's brand filter (?mgs_brand=<name>) actually works against.
+   Order here is also the tab display order. Any brand whose category isn't
+   one of these (a handful come back with no category at all) falls into a
+   trailing "Other" tab that links to the general tyres listing — not
+   guessed onto one of the real categories below. */
+const CATEGORY_SLUGS: Record<string, string> = {
+  "Tyres": "tyres",
+  "Battery": "car-battery",
+  "Wheels": "car-wheels",
+  "Motorcycle Tyres": "motorcycle-tyre",
+  "Wheel Alignment": "rim-protectors",
+};
+const CATEGORY_ORDER = Object.keys(CATEGORY_SLUGS);
+const CATEGORY_LABELS_AR: Record<string, string> = {
+  "Tyres": "الإطارات",
+  "Battery": "البطاريات",
+  "Wheels": "الجنوط",
+  "Motorcycle Tyres": "إطارات الدراجات",
+  "Wheel Alignment": "محاذاة العجلات",
+  "Other": "أخرى",
+};
 
 export default function BrandsPageInner() {
   const router = useRouter();
@@ -56,13 +45,14 @@ export default function BrandsPageInner() {
   const locale = (pathname.split("/")[1] === "ar" ? "ar" : "en") as Locale;
   const isAr = locale === "ar";
 
-  const [activeTab, setActiveTab] = useState<"TYRES" | "BATTERY">("TYRES");
+  const [allBrands, setAllBrands] = useState<Brand[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeLetter, setActiveLetter] = useState("ALL");
-  const [tyreBrands, setTyreBrands] = useState<Brand[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Load live tyre brands from API (strictly filtering out any battery brands)
+  // Load the real brand directory (all categories at once — there are only
+  // ~90 brands total, so one request and client-side grouping into tabs).
   useEffect(() => {
     let active = true;
 
@@ -70,12 +60,10 @@ export default function BrandsPageInner() {
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;
-        const list: Brand[] = (data?.brands ?? [])
-          .filter((b: Partial<Brand>) => b?.name && b?.logo)
-          // Exclude any battery brand from the tyres list
-          .filter((b: Brand) => !BATTERY_BRAND_NAMES.has(b.name.toLowerCase().trim()));
-
-        setTyreBrands([...list].sort((a, b) => a.name.localeCompare(b.name)));
+        const list: Brand[] = (data?.brands ?? []).filter(
+          (b: Partial<Brand>) => b?.name && b?.logo,
+        );
+        setAllBrands(list);
       })
       .catch((err) => {
         console.error("Failed to load brands", err);
@@ -89,11 +77,32 @@ export default function BrandsPageInner() {
     };
   }, []);
 
-  const currentBrandsList = useMemo(() => {
-    return activeTab === "TYRES" ? tyreBrands : BATTERY_BRANDS;
-  }, [activeTab, tyreBrands]);
+  // Real categories actually present in the data, in the preferred order,
+  // with any leftover (blank/unrecognized) category grouped as "Other".
+  const tabs = useMemo(() => {
+    const present = new Set(allBrands.map((b) => b.category));
+    const known = CATEGORY_ORDER.filter((c) => present.has(c));
+    const hasOther = allBrands.some((b) => !CATEGORY_SLUGS[b.category]);
+    return hasOther ? [...known, "Other"] : known;
+  }, [allBrands]);
 
-  // Filter brands based on search query and active letter
+  useEffect(() => {
+    if (activeTab === null && tabs.length) setActiveTab(tabs[0]);
+  }, [tabs, activeTab]);
+
+  const currentBrandsList = useMemo(() => {
+    if (!activeTab) return [];
+    const list =
+      activeTab === "Other"
+        ? allBrands.filter((b) => !CATEGORY_SLUGS[b.category])
+        : allBrands.filter((b) => b.category === activeTab);
+    return [...list].sort((a, b) => {
+      if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.name.localeCompare(b.name);
+    });
+  }, [allBrands, activeTab]);
+
   const filteredBrands = useMemo(() => {
     return currentBrandsList.filter((brand) => {
       const matchesSearch = brand.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
@@ -103,61 +112,49 @@ export default function BrandsPageInner() {
     });
   }, [currentBrandsList, searchQuery, activeLetter]);
 
-  // Calculate letters that have brands associated with them in the current tab
   const lettersWithBrands = useMemo(() => {
     return new Set(currentBrandsList.map((b) => b.name.charAt(0).toUpperCase()));
   }, [currentBrandsList]);
 
-  // Alphabet list A-Z
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-  const handleBrandClick = (brandName: string) => {
-    if (activeTab === "BATTERY") {
-      router.push(`/${locale}/car-batteries?brand=${encodeURIComponent(brandName)}`);
-    } else {
-      router.push(`/${locale}/tyres?brand=${encodeURIComponent(brandName)}`);
-    }
+  const handleBrandClick = (brand: Brand) => {
+    const slug = activeTab && CATEGORY_SLUGS[activeTab] ? CATEGORY_SLUGS[activeTab] : "tyres";
+    router.push(`/${locale}/${slug}?mgs_brand=${encodeURIComponent(brand.filterValue)}`);
   };
+
+  const tabLabel = (cat: string) => (isAr ? CATEGORY_LABELS_AR[cat] ?? cat : cat);
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="bg-white min-h-screen pt-8 pb-20 font-sans">
       <div className="container mx-auto max-w-7xl px-4 sm:px-6">
-        
-        {/* ── 1. Category Switcher (TYRES / BATTERY Pill) ─────────────── */}
-        <div className="flex justify-center mb-10">
-          <div className="bg-[#1f242b] p-1.5 rounded-full inline-flex items-center gap-1 shadow-md">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("TYRES");
-                setActiveLetter("ALL");
-                setSearchQuery("");
-              }}
-              className={`px-8 sm:px-10 py-2.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider transition-all duration-200 ${
-                activeTab === "TYRES"
-                  ? "bg-[#ed1c24] text-white shadow-md"
-                  : "text-gray-300 hover:text-white"
-              }`}
-            >
-              {isAr ? "الإطارات" : "TYRES"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("BATTERY");
-                setActiveLetter("ALL");
-                setSearchQuery("");
-              }}
-              className={`px-8 sm:px-10 py-2.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider transition-all duration-200 ${
-                activeTab === "BATTERY"
-                  ? "bg-[#ed1c24] text-white shadow-md"
-                  : "text-gray-300 hover:text-white"
-              }`}
-            >
-              {isAr ? "البطاريات" : "BATTERY"}
-            </button>
+
+        {/* ── 1. Category Switcher — built from whichever real brand_category
+              values kleverBrands actually returns, not a hardcoded pair ── */}
+        {tabs.length > 1 && (
+          <div className="flex justify-center mb-10">
+            <div className="bg-[#1f242b] p-1.5 rounded-full inline-flex items-center gap-1 shadow-md flex-wrap justify-center">
+              {tabs.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(cat);
+                    setActiveLetter("ALL");
+                    setSearchQuery("");
+                  }}
+                  className={`px-6 sm:px-8 py-2.5 rounded-full text-xs sm:text-sm font-black uppercase tracking-wider transition-all duration-200 ${
+                    activeTab === cat
+                      ? "bg-[#ed1c24] text-white shadow-md"
+                      : "text-gray-300 hover:text-white"
+                  }`}
+                >
+                  {tabLabel(cat)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── 2. Search Bar & Alphabet Filter Card ───────────────────── */}
         <div className="bg-[#ececec]/80 border border-gray-200/90 rounded-2xl p-5 sm:p-7 shadow-xs mb-14 max-w-5xl mx-auto">
@@ -222,27 +219,17 @@ export default function BrandsPageInner() {
         {/* ── 3. Section Title ───────────────────────────────────────── */}
         <div className="text-center mb-10">
           <p className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-widest mb-1.5">
-            {activeTab === "BATTERY"
-              ? isAr
-                ? "ماركات البطاريات"
-                : "Battery Brands"
-              : isAr
-              ? "ماركات الإطارات"
-              : "Tyres Brands"}
+            {activeTab ? `${tabLabel(activeTab)} ${isAr ? "" : "Brands"}` : ""}
           </p>
           <h1 className="text-xl sm:text-2xl md:text-[28px] font-black uppercase tracking-tight text-gray-950">
-            {activeTab === "BATTERY"
-              ? isAr
-                ? "مجموعة واسعة من ماركات البطاريات الموثوقة"
-                : "WIDE RANGE OF TRUSTED BATTERY BRANDS"
-              : isAr
-              ? "مجموعة واسعة من ماركات الإطارات الموثوقة"
-              : "WIDE RANGE OF TRUSTED TYRES BRANDS"}
+            {isAr
+              ? "مجموعة واسعة من العلامات التجارية الموثوقة"
+              : `WIDE RANGE OF TRUSTED ${activeTab ? activeTab.toUpperCase() : ""} BRANDS`}
           </h1>
         </div>
 
         {/* ── 4. Brands Grid (5 columns per row) ────────────────────── */}
-        {loading && activeTab === "TYRES" ? (
+        {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 lg:gap-5">
             {Array.from({ length: 15 }).map((_, i) => (
               <div
@@ -262,7 +249,7 @@ export default function BrandsPageInner() {
             {filteredBrands.map((brand) => (
               <div
                 key={brand.name}
-                onClick={() => handleBrandClick(brand.name)}
+                onClick={() => handleBrandClick(brand)}
                 className="h-[76px] sm:h-[84px] bg-white border border-gray-200/90 rounded-xl flex items-center justify-center px-4 py-2 hover:shadow-md hover:border-gray-350 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group shadow-2xs"
               >
                 {brand.logo ? (

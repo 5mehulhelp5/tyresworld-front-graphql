@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 /* ── Vendor: Swiper ────────────────────────────────────────────────
    Imported here rather than from each carousel component so every
    stylesheet in the app still enters through this one file. Covers
@@ -3050,6 +3055,112 @@ html[lang="ar"] .tab-content {
 .cms-content [style*="min-height: 280px"] {
   display: flex;
   flex-direction: column;
+}
+
+/* ── Car Services Grid Cards (car-service CMS page) ── */
+.cms-content .service-box .service-inner {
+  background: #ffffff;
+  border: 1px solid var(--brand-red, #ed1c24);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin-bottom: 30px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.cms-content .service-box .service-inner:hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.cms-content .service-box .service-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background-color: #f3f4f6;
+}
+
+.cms-content .service-box .service-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.cms-content .service-box .service-inner:hover .service-image img {
+  transform: scale(1.05);
+}
+
+.cms-content .service-box .service-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--brand-red, #ed1c24);
+  color: #ffffff;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+[dir="rtl"] .cms-content .service-box .service-icon {
+  left: auto;
+  right: 0;
+}
+
+.cms-content .service-box .service-icon span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cms-content .service-box .service-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: #ffffff;
+}
+
+.cms-content .service-box .service-info {
+  padding: 22px 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.cms-content .service-box .service-info h4 {
+  font-size: 15px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #09090b;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.cms-content .service-box .service-info h4 a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.cms-content .service-box .service-info h4 a:hover {
+  color: var(--brand-red, #ed1c24);
+}
+
+.cms-content .service-box .service-info p {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 0;
+  font-weight: 400;
 }
 
 /* FAQ accordion (Bootstrap 5 markup) — behaviour wired up by

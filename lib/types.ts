@@ -41,7 +41,12 @@ export type Money = { value: number; currency: string };
 export interface ServerCartItem {
   uid: string;
   quantity: number;
-  prices: { row_total: Money; price: Money };
+  prices: {
+    row_total: Money;
+    price: Money;
+    price_including_tax?: Money | null;
+    row_total_including_tax?: Money | null;
+  };
   product: {
     name: string;
     sku: string;

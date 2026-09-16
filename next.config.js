@@ -22,6 +22,22 @@ const nextConfig = {
       { protocol: "https", hostname: "www.tyresworld.ae" },
     ],
   },
+  async redirects() {
+    return [
+      /* The real main menu (kleverMainMenu, see lib/services/menu.service.ts)
+         links "Tyres by Brand" to /brand — that's a real live page (Magento
+         admin's own menu module), but not one Magento's route/urlResolver
+         GraphQL query can resolve (same "real page, ungettable via GraphQL"
+         situation as car-battery-replacement and /faq). We already have the
+         real brand-listing content at /brands (app/[locale]/brands), so
+         redirect the menu's real URL there instead of 404ing. */
+      {
+        source: "/:locale(en|ar)/brand",
+        destination: "/:locale/brands",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

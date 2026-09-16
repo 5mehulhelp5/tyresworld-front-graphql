@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CATEGORY_PAGE_QUERY, CATEGORY_UID_BY_URL_KEY_QUERY } from "@/lib/queries";
 import { parseGraphqlResponse, parseAggregations } from "@/lib/magento";
 import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
-import { findBrandLogo } from "@/lib/brandLogoScan";
+import { resolveBrandInfo } from "@/lib/services/brands.service";
 import type { Product } from "@/lib/data";
 type SortInput = Record<string, "ASC" | "DESC">;
 
@@ -77,7 +77,6 @@ function pairStaggered(front: Product[], rear: Product[]): { front: Product; rea
 
 function buildSort(order: string): SortInput | undefined {
   switch (order) {
-    case "recommended":
     case "position":
       return { position: "ASC" };
     default:
@@ -85,57 +84,16 @@ function buildSort(order: string): SortInput | undefined {
   }
 }
 
-/**
- * Fill in each product's `brandLogoUrl` from the local mgs_brand mirror.
- *
- * Magento exposes no `brand_logo_url` on ProductInterface, so the field
- * always arrives empty and the card falls back to `getBrandLogo(product.brand)`
- * — a numeric lookup that only covers the 32 brands still listed in
- * lib/brandLogos.ts, leaving the other ~180 rendering a text name.
- *
- * findBrandLogo() already derives brand -> file from public/brands/mgs_brand,
- * so resolving here (server-side; the scanner needs `fs`) gives the card a
- * real URL through its existing `product.brandLogoUrl ?? …` chain. Products
- * whose brand has no file are left untouched — nothing is substituted.
- */
-function withBrandLogos<T extends { brandName?: unknown; brandLogoUrl?: string }>(products: T[]): T[] {
-  const cache = new Map<string, string | null>();
-
-  return products.map((product) => {
-    /* `brandName` is typed as a string but the adapter falls back to the raw
-       `mgs_brand` value, which is numeric — coerce rather than assume. */
-    const name = String(product.brandName ?? "").trim();
-    if (!cache.has(name)) cache.set(name, findBrandLogo(name)?.logo ?? null);
-    const logo = cache.get(name);
-
-    return logo ? { ...product, brandLogoUrl: logo } : product;
-  });
-}
-
 function buildCategoryMetadata(
   cat: { uid: string; name: string; description?: string | null; meta_title?: string | null; meta_description?: string | null; url_key?: string; category_page_title?: string | null } | undefined | null,
-  urlKey: string,
 ) {
-  if (urlKey === "electric-vehicle-tyres-uae" || urlKey === "ev-tyres" || urlKey === "ev-tires") {
-    return {
-      uid: "MTg=",
-      name: "EV Tyres",
-      metaTitle: "Buy EV Tyres Online in UAE – Electric Vehicle Tyres",
-      metaDescription: "Shop premium EV tyres online in the UAE. Specially designed for electric cars with lower rolling resistance, high load capacity, and silent driving comfort.",
-      description: `<h2>Electric Vehicle (EV) Tyres in the UAE</h2><p>Find the best tyres engineered specifically for electric and hybrid vehicles. EV tyres offer lower rolling resistance for extended battery range, reinforced construction for higher vehicle weight, and acoustic foam technology for whisper-quiet rides.</p>`,
-      urlKey,
-    };
-  }
-  if (urlKey === "run-flat-tires") {
-    return {
-      uid: "MTg=",
-      name: "Run-Flat Tyres",
-      metaTitle: "Buy Run-Flat Tyres Online in UAE – TyresWorld",
-      metaDescription: "Shop run-flat tyres in UAE. Drive safely even after a puncture with self-supporting tyres from top brands.",
-      description: `<h2>Run-Flat Tyres in the UAE</h2><p>Explore durable run-flat tyres engineered with reinforced sidewalls to keep you driving safely up to 80 km/h even after a sudden loss of air pressure.</p>`,
-      urlKey,
-    };
-  }
+  /* electric-vehicle-tyres-uae / ev-tyres / ev-tires and run-flat-tires used
+     to return fully fabricated name/metaTitle/metaDescription/description
+     text here instead of using `cat` — invented marketing copy, not sourced
+     from Magento. `cat` is the real Tyres category (uid MTg=) fetched by
+     every caller of this function regardless of urlKey (all three of these
+     synthetic filtered views resolve to that same real category), so it was
+     available the whole time; the special branches just discarded it. */
   if (!cat) return null;
   return {
     uid: cat.uid,
@@ -154,7 +112,8 @@ function buildCategoryMetadata(
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
+  try {
+    const { searchParams } = new URL(req.url);
 
   const urlKey      = searchParams.get("urlKey") ?? "";
   const store       = searchParams.get("store") ?? "default";
@@ -162,7 +121,15 @@ export async function GET(req: NextRequest) {
   const currentPage = Math.max(Number(searchParams.get("page") ?? 1) || 1, 1);
   const rawSort     = searchParams.get("sort") ?? "";
   const sort        = buildSort(rawSort);
-  const isPriceSort = rawSort === "low-to-high" || rawSort === "high-to-low";
+  /* "recommended" is folded in here too — verified live (Puppeteer, same
+     product order + same real prices for /en/tyres with no sort param vs
+     ?product_list_order=recommended vs ?product_list_order=low-to-high):
+     on this store, "Recommended" isn't a distinct Magento sort at all, it
+     produces the exact same ascending-price order as the real default.
+     Previously mapped to `{ position: "ASC" }`, a real but DIFFERENT
+     Magento sort (admin-configured position order) that doesn't match
+     what the live toolbar option actually produces. */
+  const isPriceSort = rawSort === "low-to-high" || rawSort === "high-to-low" || rawSort === "recommended";
   const search      = searchParams.get("q") ?? searchParams.get("search") ?? "";
 
   if (!urlKey) {
@@ -174,14 +141,22 @@ export async function GET(req: NextRequest) {
     urlKey === "ev-tyres" ||
     urlKey === "ev-tires";
   const isRunFlatCategory = urlKey === "run-flat-tires";
-  const isOnRoadCategory = urlKey === "on-road-tires";
-  const isOffRoadCategory = urlKey === "off-road-tires-4x4";
-  const isSpecialTyreCategory =
-    isEvCategory || isRunFlatCategory || isOnRoadCategory || isOffRoadCategory;
+  const isTyreCategory =
+    urlKey === "tyres" ||
+    urlKey === "tyres/size" ||
+    urlKey === "tyres/cars" ||
+    urlKey === "brand" ||
+    urlKey === "special-offers" ||
+    isEvCategory ||
+    isRunFlatCategory;
 
-  /* Resolve category urlKey → category UID using route query and fallback */
-  let categoryUid: string | null = isSpecialTyreCategory ? "MTg=" : null;
-  if (!isSpecialTyreCategory) {
+  /* Resolve category urlKey → category UID using known mappings, route query, and fallback */
+  let categoryUid: string | null = null;
+  if (urlKey === "motorcycle-tyre") {
+    categoryUid = APP_CONFIG.magento.motorcycleCategoryUid;
+  } else if (isTyreCategory) {
+    categoryUid = APP_CONFIG.magento.tyresCategoryUid;
+  } else {
     try {
       const lookup = await fetch(APP_CONFIG.magento.graphqlUrl, {
         method: "POST",
@@ -281,7 +256,7 @@ export async function GET(req: NextRequest) {
     else if (values.length > 1) filters[key] = { in: values };
   }
 
-  const leafUrlKey = isSpecialTyreCategory
+  const leafUrlKey = isTyreCategory
     ? "tyres"
     : (urlKey.split("/").pop() ?? urlKey);
 
@@ -300,8 +275,7 @@ export async function GET(req: NextRequest) {
     searchParams.get("rrim");
   const isStaggeredRequest = Boolean(rearWidth && rearHeight && rearRim);
 
-  try {
-    /* ── Staggered (front+rear) request ──────────────────────────
+  /* ── Staggered (front+rear) request ──────────────────────────
        Pull every candidate on both sides (capped), pair them, THEN
        paginate the pairs — not Magento's front-only total_count.
        A front tyre whose brand has no rear stock in that size never
@@ -378,8 +352,8 @@ export async function GET(req: NextRequest) {
       const frontPd = frontJson?.data?.products;
       const rearPd = rearJson?.data?.products;
 
-      const allFront = withBrandLogos(parseGraphqlResponse({ data: { products: frontPd } }));
-      const allRear = rearPd ? withBrandLogos(parseGraphqlResponse({ data: { products: rearPd } })) : [];
+      const allFront = await resolveBrandInfo(parseGraphqlResponse({ data: { products: frontPd } }), store);
+      const allRear = rearPd ? await resolveBrandInfo(parseGraphqlResponse({ data: { products: rearPd } }), store) : [];
 
       /* Unpaired fallback listing — same semantics as the plain path below:
          total/totalPages reflect Magento's real front-only total_count, and
@@ -402,10 +376,10 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json(
         {
-          category: buildCategoryMetadata(cat, urlKey),
+          category: buildCategoryMetadata(cat),
           products:    productsPage,
           rearProducts: allRear,
-          filters:     parseAggregations({ data: { products: frontPd } }),
+          filters:     parseAggregations({ data: { products: frontPd } }, frontTotal),
           total:       frontTotal,
           totalPages:  frontTotalPages,
           currentPage,
@@ -458,7 +432,7 @@ export async function GET(req: NextRequest) {
 
       const cat = allJson?.data?.categories?.items?.[0];
       const pd = allJson?.data?.products;
-      const allProducts = withBrandLogos(parseGraphqlResponse({ data: { products: pd } }));
+      const allProducts = await resolveBrandInfo(parseGraphqlResponse({ data: { products: pd } }), store);
 
       allProducts.sort((a, b) =>
         rawSort === "high-to-low" ? (b.price ?? 0) - (a.price ?? 0) : (a.price ?? 0) - (b.price ?? 0),
@@ -471,10 +445,10 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json(
         {
-          category: buildCategoryMetadata(cat, urlKey),
+          category: buildCategoryMetadata(cat),
           products: allProducts.slice(pageStart, pageStart + pageSize),
           rearProducts: [],
-          filters: parseAggregations({ data: { products: pd } }),
+          filters: parseAggregations({ data: { products: pd } }, pd?.total_count ?? allProducts.length),
           total,
           totalPages,
           currentPage,
@@ -519,12 +493,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        category: buildCategoryMetadata(cat, urlKey),
-        products:    withBrandLogos(parseGraphqlResponse({ data: { products: pd } })),
+        category: buildCategoryMetadata(cat),
+        products:    await resolveBrandInfo(parseGraphqlResponse({ data: { products: pd } }), store),
         rearProducts: [],
         /* Layered-nav options for the sidebar come back on this same
            response, so the listing needs no second request. */
-        filters:     parseAggregations({ data: { products: pd } }),
+        filters:     parseAggregations({ data: { products: pd } }, pd?.total_count ?? 0),
         total:       pd?.total_count ?? 0,
         totalPages:  pd?.page_info?.total_pages ?? 1,
         currentPage: pd?.page_info?.current_page ?? currentPage,

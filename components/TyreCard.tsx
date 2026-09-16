@@ -7,7 +7,6 @@ import FullyFittedPriceModal from "@/components/FullyFittedPriceModal";
 import ProductImage from "@/components/ProductImage";
 import type { Product } from "@/lib/data";
 import { useOfferLabels } from "@/lib/useOfferLabels";
-import { getBrandLogo } from "@/lib/brandLogos";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
 import { isMotorcycleProduct } from "@/lib/magento";
@@ -137,7 +136,7 @@ export default function TyreCard({ product }: { product: Product }) {
   const href     = product.urlKey ? `/en/product/${product.urlKey}` : product.sku ? `/product/${product.sku}` : "/";
   const waUrl    = `https://wa.me/966500000000?text=${encodeURIComponent(`Hi, I'm interested in: ${product.name}`)}`;
   const bStyle   = BRAND_STYLE[brand.toLowerCase()] ?? { bg: "#fff", text: "#111" };
-  const logoUrl = product.brandLogoUrl ?? getBrandLogo(product.brand) ?? getBrandLogo(product.brandName);
+  const logoUrl = product.brandLogoUrl;
   const warranty = WARRANTY_MAP[brand.toLowerCase()] ?? "1 YEAR WARRANTY";
 
   const offerLabels = useOfferLabels();

@@ -1,37 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
-import { PICKUP_LOCATIONS_QUERY } from "@/lib/queries";
+import { magentoFetch } from "@/lib/graphql/client";
+import { KLEVER_INSTALLER_STORES_QUERY } from "@/lib/queries";
 
 /* GET /api/store-locator?locale=en|ar
  *
- * Branches come ONLY from Magento's `pickupLocations` GraphQL query — the
- * standard MSI "in-store pickup" API (Stores > Inventory > Sources, with
- * "Enable Store Pickup" turned on). `cities` is derived from whichever
- * branches actually come back — never a fixed list. There is no static or
- * mock fallback for either: if Magento returns zero pickup locations (as it
- * does right now — none are configured yet), branches/cities come back
- * empty and the page shows its existing empty state. That's correct
- * behaviour for live data, not a bug to work around with placeholder rows.
+ * Branches come from Magento's `kleverInstallerStores` GraphQL query (Klever
+ * module) — real, active installer/pickup partners, not the standard MSI
+ * `pickupLocations` API this route used before. That one returns ZERO
+ * results (confirmed live — nothing is configured under Stores > Inventory
+ * > Sources), so this page's branch list was always empty. kleverInstallerStores
+ * returns real data matching what the live storefront's own store-locator
+ * page shows (verified: same store name as the live page's first result).
+ * `delivery_mode: "outlet"` is this query's own short vocabulary — distinct
+ * from the "install_at_outlet" value used at checkout. `cities` is derived
+ * from whichever branches actually come back — never a fixed list.
  *
- * Delivery-option copy, mobile-van service areas/fees, and time slots have
- * no Magento entity behind them at all — there's no backend concept of
- * "mobile van" or "free shipping" service areas — so that part of the
- * response still comes from the local JSON config file. That's UI/business
- * copy, not data with a live source to begin with.
+ * Booking time slots have no Magento entity behind them at all — there's no
+ * backend concept of installation appointment windows — so that part of the
+ * response still comes from the local JSON config file. That's a business
+ * scheduling policy, not data with a live source to begin with.
+ *
+ * (Previously this file also served `deliveryOptions` and `mobileVans` —
+ * including a static "AED 150.00" mobile-van fee — from that same JSON file,
+ * but the storelocator page never actually rendered either one; removed
+ * rather than leave a stale price sitting in an API response nothing reads.)
  */
 
-type GqlPickupLocation = {
-  pickup_location_code?: string | null;
-  name?: string | null;
-  city?: string | null;
-  street?: string | null;
-  region?: string | null;
-  phone?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-};
+import { getStores, KleverStoreItem } from "@/lib/services/stores.service";
 
 type Branch = {
   id: string;
@@ -42,37 +39,72 @@ type Branch = {
   lng: number;
   phone?: string;
   whatsapp?: string;
+  email?: string;
+  external_link?: string;
 };
 
 async function fetchBranches(locale: string): Promise<{ branches: Branch[]; cities: string[] }> {
-  const res = await fetch(APP_CONFIG.magento.graphqlUrl, {
-    method: "POST",
-    headers: magentoHeaders(locale) as Record<string, string>,
-    body: JSON.stringify({ query: PICKUP_LOCATIONS_QUERY, variables: { pageSize: 200 } }),
-    next: { revalidate: 300 },
-  });
+  // 1. Try public store locator query (kleverStores) — carries phone, email, map links
+  const storesData = await getStores({ store: locale, pageSize: 50 });
+  if (storesData?.items?.length) {
+    const branches: Branch[] = storesData.items
+      .map((i): Branch | null => {
+        const lat = i.latitude != null ? Number(i.latitude) : NaN;
+        const lng = i.longitude != null ? Number(i.longitude) : NaN;
+        const name = locale === "ar" && i.name_ar ? i.name_ar : i.name;
+        if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const address = locale === "ar" && i.address_ar ? i.address_ar : i.address;
+        const city = locale === "ar" && i.city_ar ? i.city_ar : (i.city ?? "");
+        const phone = i.phone?.trim() || undefined;
+        const whatsapp = phone ? phone.replace(/[^0-9]/g, "") : undefined;
 
-  const json = await res.json().catch(() => null);
-  if (json?.errors?.length) {
-    throw new Error(json.errors[0]?.message ?? "pickupLocations query failed");
+        return {
+          id: i.stores_id != null ? String(i.stores_id) : `${name}-${lat}-${lng}`,
+          name,
+          address: [address, city, i.country].filter(Boolean).join(", "),
+          city: city,
+          lat,
+          lng,
+          phone,
+          whatsapp,
+          email: i.email?.trim() || undefined,
+          external_link: i.external_link?.trim() || undefined,
+        };
+      })
+      .filter((b): b is Branch => b !== null);
+
+    const cities = Array.from(new Set(branches.map((b) => b.city).filter(Boolean)));
+    return { branches, cities };
   }
 
-  const items: GqlPickupLocation[] = json?.data?.pickupLocations?.items ?? [];
+  // 2. Fallback to installer stores query
+  const r = await magentoFetch<{ kleverInstallerStores?: { stores_id?: number; name?: string; city?: string; address?: string; country?: string; latitude?: string | number; longitude?: string | number }[] | null }>(
+    KLEVER_INSTALLER_STORES_QUERY,
+    { deliveryMode: "outlet" },
+    { store: locale, revalidate: 300 },
+  );
+
+  if (!r.ok || r.errors?.length) {
+    throw new Error(r.errors?.[0]?.message ?? "kleverStores query failed");
+  }
+
+  const items = r.data?.kleverInstallerStores ?? [];
 
   const branches: Branch[] = items
-    .filter((i): i is GqlPickupLocation & { latitude: number; longitude: number; name: string } =>
-      i.latitude != null && i.longitude != null && !!i.name,
-    )
-    .map((i) => ({
-      id: i.pickup_location_code || `${i.name}-${i.latitude}-${i.longitude}`,
-      name: i.name,
-      address: [i.street, i.city, i.region].filter(Boolean).join(", "),
-      city: i.city ?? "",
-      lat: i.latitude,
-      lng: i.longitude,
-      phone: i.phone ?? undefined,
-      whatsapp: i.phone ? i.phone.replace(/[^0-9]/g, "") : undefined,
-    }));
+    .map((i) => {
+      const lat = i.latitude != null ? Number(i.latitude) : NaN;
+      const lng = i.longitude != null ? Number(i.longitude) : NaN;
+      if (!i.name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return {
+        id: i.stores_id != null ? String(i.stores_id) : `${i.name}-${lat}-${lng}`,
+        name: i.name,
+        address: [i.address, i.city, i.country].filter(Boolean).join(", "),
+        city: i.city ?? "",
+        lat,
+        lng,
+      };
+    })
+    .filter((b): b is Branch => b !== null);
 
   const cities = Array.from(new Set(branches.map((b) => b.city).filter(Boolean)));
 
@@ -84,48 +116,34 @@ export async function GET(req: NextRequest) {
   const locale = searchParams.get("locale") === "ar" ? "ar" : "en";
   const allLabel = locale === "ar" ? "الكل" : "All";
 
-  // Delivery-option copy, mobile-van areas, and time slots aren't Magento
-  // entities — those still come from the local config file (see comment above).
-  let deliveryOptions: unknown[] = [];
-  let mobileVans: unknown[] = [];
   let timeSlots: unknown[] = [];
   try {
     const jsonPath = path.join(process.cwd(), "public", "data", "store-locator.json");
     const fileContent = await fs.readFile(jsonPath, "utf-8");
     const parsed = JSON.parse(fileContent);
     const localeConfig = parsed[locale] ?? parsed.en;
-    deliveryOptions = localeConfig.deliveryOptions ?? [];
-    mobileVans = localeConfig.mobileVans ?? [];
     timeSlots = localeConfig.timeSlots ?? [];
   } catch (err) {
     console.error("Failed to read store locator config JSON:", err);
   }
 
   try {
-    // Branches/cities: Magento only. No static/mock fallback — an empty
-    // result here is passed straight through as empty.
     const { branches, cities } = await fetchBranches(locale);
 
     return NextResponse.json(
       {
         cities: [allLabel, ...cities],
-        deliveryOptions,
         branches,
-        mobileVans,
         timeSlots,
       },
       { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=300" } },
     );
   } catch (err) {
     console.error("Failed to fetch pickup locations from Magento:", err);
-    // Magento call itself failed (network/schema error) — still return an
-    // empty branch list rather than inventing one.
     return NextResponse.json(
       {
         cities: [allLabel],
-        deliveryOptions,
         branches: [],
-        mobileVans,
         timeSlots,
         error: "Store locations unavailable",
       },

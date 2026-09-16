@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-// Legacy non-locale URL → canonical locale route. The category itself is
-// resolved dynamically by app/[locale]/[slug] via Magento urlResolver.
+// Legacy non-locale URL. "off-road-tires-4x4" itself no longer resolves to a
+// distinct page — Magento has no real attribute distinguishing on-road from
+// off-road/4x4 tyres, so this now goes straight to the real Tyres category.
 export default function OffRoadTiresRedirect() {
-  redirect("/en/off-road-tires-4x4");
+  redirect("/en/tyres");
 }

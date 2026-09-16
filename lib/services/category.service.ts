@@ -6,6 +6,7 @@
 import { magentoFetch } from "@/lib/graphql/client";
 import { CATEGORY_PRODUCTS_BY_UID_QUERY, CATEGORY_PAGE_QUERY, CATEGORY_META_BY_URL_KEY_QUERY } from "@/lib/queries";
 import { parseGraphqlResponse, type GqlProductsResponse } from "@/lib/magento";
+import { resolveBrandInfo } from "@/lib/services/brands.service";
 import { APP_CONFIG } from "@/src/config/app-config";
 import type { Product } from "@/lib/data";
 
@@ -103,7 +104,10 @@ export async function getCategoryProducts(params: {
 
   const cat = (r.data?.categories?.items?.[0] ?? null) as Record<string, unknown> | null;
   const pd = r.data?.products;
-  const products = parseGraphqlResponse({ data: r.data } as unknown as GqlProductsResponse);
+  const products = await resolveBrandInfo(
+    parseGraphqlResponse({ data: r.data } as unknown as GqlProductsResponse),
+    params.store,
+  );
 
   return {
     ok: true,

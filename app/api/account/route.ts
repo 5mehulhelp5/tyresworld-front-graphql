@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_QUERIES, CUSTOMER_ORDER_DETAIL_QUERY, IS_EMAIL_AVAILABLE_QUERY, WISHLIST_QUERY, CUSTOMER_DOWNLOADABLE_PRODUCTS_QUERY } from "@/lib/queries";
+import { AUTH_QUERIES, CUSTOMER_ORDER_DETAIL_QUERY, IS_EMAIL_AVAILABLE_QUERY, WISHLIST_QUERY, CUSTOMER_DOWNLOADABLE_PRODUCTS_QUERY, CUSTOMER_REVIEWS_QUERY } from "@/lib/queries";
 import { AUTH_MUTATIONS, ACCOUNT_MUTATIONS, ADDRESS_MUTATIONS, PAYMENT_TOKEN_MUTATIONS, CUSTOMER_PAYMENT_TOKENS_QUERY, WISHLIST_MUTATIONS } from "@/lib/mutations";
 import { hasOperation, featureUnavailable } from "@/lib/magento-capabilities";
 import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
 import { readAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth-cookie";
+import { injectRawBrandFields } from "@/lib/services/brands.service";
 
 
 const Q = { ...AUTH_QUERIES, ...AUTH_MUTATIONS };
@@ -27,6 +28,18 @@ async function gql(
 }
 
 const err = (j: Gql) => j?.errors?.[0]?.message;
+
+type RawWishlistProduct = { brand?: string | number | null; brand_name?: string | null; brand_logo_url?: string | null };
+
+/** Real brand_name/brand_logo_url for every product in a wishlist_v2
+    payload, mutated in place before it goes back to the client — see
+    injectRawBrandFields in lib/services/brands.service.ts. */
+async function injectWishlistBrands(wishlist: { items_v2?: { items?: { product?: RawWishlistProduct }[] } } | null): Promise<void> {
+  const products = (wishlist?.items_v2?.items ?? [])
+    .map((i) => i?.product)
+    .filter((p): p is RawWishlistProduct => !!p);
+  if (products.length) await injectRawBrandFields(products);
+}
 
 export async function POST(req: NextRequest) {
   const body  = await req.json().catch(() => ({} as Record<string, unknown>));
@@ -185,6 +198,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: !err(j), error: err(j) });
       }
 
+      /* ── Customer Product Reviews ────────────────────────────────── */
+      case "reviews": {
+        if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+        const j = await gql(CUSTOMER_REVIEWS_QUERY, {}, token);
+        const items = (j.data?.customer?.reviews as { items?: unknown[] })?.items ?? [];
+        return NextResponse.json({ reviews: items, error: err(j) });
+      }
+
       /* ── Downloadable products (capability-gated) ─────────────────── */
       /* Dormant while the catalog has no downloadable products;
        * activates automatically if the module/type is ever used. */
@@ -202,6 +223,7 @@ export async function POST(req: NextRequest) {
         if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
         const j = await gql(WISHLIST_QUERY, {}, token);
         const wishlist = j.data?.customer?.wishlist_v2 ?? null;
+        await injectWishlistBrands(wishlist);
         return NextResponse.json({ wishlist, error: err(j) });
       }
 
@@ -219,8 +241,10 @@ export async function POST(req: NextRequest) {
         }, token);
         const userErrors = j.data?.addProductsToWishlist?.user_errors ?? [];
         const errorMsg = userErrors[0]?.message ?? err(j);
+        const addedWishlist = j.data?.addProductsToWishlist?.wishlist ?? null;
+        await injectWishlistBrands(addedWishlist);
         return NextResponse.json({
-          wishlist: j.data?.addProductsToWishlist?.wishlist ?? null,
+          wishlist: addedWishlist,
           error: errorMsg || null
         });
       }
@@ -239,8 +263,10 @@ export async function POST(req: NextRequest) {
         }, token);
         const userErrors = j.data?.removeProductsFromWishlist?.user_errors ?? [];
         const errorMsg = userErrors[0]?.message ?? err(j);
+        const remainingWishlist = j.data?.removeProductsFromWishlist?.wishlist ?? null;
+        await injectWishlistBrands(remainingWishlist);
         return NextResponse.json({
-          wishlist: j.data?.removeProductsFromWishlist?.wishlist ?? null,
+          wishlist: remainingWishlist,
           error: errorMsg || null
         });
       }
@@ -259,8 +285,10 @@ export async function POST(req: NextRequest) {
         }, token);
         const userErrors = j.data?.addWishlistItemsToCart?.add_wishlist_items_to_cart_user_errors ?? [];
         const errorMsg = userErrors[0]?.message ?? err(j);
+        const movedWishlist = j.data?.addWishlistItemsToCart?.wishlist ?? null;
+        await injectWishlistBrands(movedWishlist);
         return NextResponse.json({
-          wishlist: j.data?.addWishlistItemsToCart?.wishlist ?? null,
+          wishlist: movedWishlist,
           status: j.data?.addWishlistItemsToCart?.status ?? false,
           error: errorMsg || null
         });
@@ -281,8 +309,14 @@ export async function POST(req: NextRequest) {
         }, token);
         const userErrors = (j.data?.updateProductsInWishlist as { user_errors?: { message: string }[] } | undefined)?.user_errors ?? [];
         const errorMsg = userErrors[0]?.message ?? err(j);
+        const updatedWishlist =
+          (j.data?.updateProductsInWishlist as
+            | { wishlist?: { items_v2?: { items?: { product?: RawWishlistProduct }[] } } }
+            | undefined
+          )?.wishlist ?? null;
+        await injectWishlistBrands(updatedWishlist);
         return NextResponse.json({
-          wishlist: (j.data?.updateProductsInWishlist as { wishlist?: unknown } | undefined)?.wishlist ?? null,
+          wishlist: updatedWishlist,
           error: errorMsg || null,
         });
       }

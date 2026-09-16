@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMenu } from "@/lib/services/menu.service";
+import { getMainMenu } from "@/lib/services/menu.service";
+import { storeCode } from "@/lib/i18n";
 
+/** Real live main menu (Klever kleverMainMenu) as JSON — the header itself
+    gets this server-side via app/layout.tsx; this route exists for any
+    client-side caller that needs the same data (e.g. a future locale
+    switcher) without duplicating the fetch/adapt logic. */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const locale = searchParams.get("locale") ?? "en";
 
-  const r = await getMenu(locale);
-
-  if (!r.ok) {
-    return NextResponse.json({ menu: [], error: r.error }, { status: r.status });
-  }
+  const menu = await getMainMenu(storeCode(locale === "ar" ? "ar" : "en"));
 
   return NextResponse.json(
-    { menu: r.menu, ...(r.error ? { error: r.error } : {}) },
-    r.menu.length
-      ? { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } }
-      : undefined,
+    { menu: menu ?? [], ...(menu ? {} : { error: "kleverMainMenu unavailable" }) },
+    menu ? { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } } : undefined,
   );
 }

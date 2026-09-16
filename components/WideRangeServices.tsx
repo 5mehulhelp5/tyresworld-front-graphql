@@ -96,7 +96,7 @@ export default function WideRangeServices({ locale = "en" }: { locale?: string }
 
         {/* ── CTA ─────────────────────────────────────────────── */}
         <div className="section-cta">
-          <Link href={`/${locale}/car-service-abudhabi`} className="button-primary">
+          <Link href={`/${locale}/car-service`} className="button-primary">
             <span>View All Car Services</span>
           </Link>
         </div>

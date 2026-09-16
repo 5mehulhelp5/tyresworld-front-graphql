@@ -57,6 +57,19 @@ export interface GqlProduct {
   /** Raw select-attribute option ID (e.g. 2095), not a label — resolved to
       text server-side in product.service.ts, same as brand IDs elsewhere. */
   bike_tyre_type?: number | string | null;
+  /** Real per-set prices from the Klever module — the values come back as
+      display strings, INCONSISTENTLY formatted (e.g. "1800.00" but
+      "3,600.00"), so parse them, never render them verbatim. */
+  kleverSetPricing?: {
+    set1_price?: string | null;
+    set2_price?: string | null;
+    set4_price?: string | null;
+    promo_rule_id?: string | number | null;
+    promo_label?: string | null;
+    promo_banner_url?: string | null;
+    promo_discount_amount?: string | number | null;
+    promo_discount_step?: string | number | null;
+  } | null;
 
   image?: GqlImage | null;
   small_image?: GqlImage | null;
@@ -144,8 +157,11 @@ export interface ApiProductsResponse {
 /* ─────────────────────────────────────────────────────────────────
    INTERNAL HELPERS
 ───────────────────────────────────────────────────────────────── */
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&q=80&auto=format&fit=crop";
+/* No fallback image constant here on purpose: when a real product has no
+   real Magento image, `image` below is left as an empty string — the
+   already-established <ProductImage> component (components/ProductImage.tsx)
+   treats an empty src as "no real photo" and shows its own local, honest
+   placeholder icon, never a stock photo pretending to be the product. */
 
 /** Pick the primary category name from the GraphQL list (most specific last) */
 function resolveCategory(p: GqlProduct): string {
@@ -177,22 +193,75 @@ function resolvePrices(p: GqlProduct): [number, number | undefined, number | und
   return [regular || final, undefined, max, currency];
 }
 
+/** kleverSetPricing's numeric fields come back as display strings,
+    inconsistently formatted (seen: "1800.00" alongside "3,600.00" in the
+    same response) — strip any thousands separators before parsing. */
+function parseSetPrice(v: string | number | null | undefined): number | undefined {
+  if (v == null) return undefined;
+  const n = typeof v === "number" ? v : parseFloat(v.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** kleverSetPricing's own set4_price doesn't always have a matching
+    bulk-buy rule discount applied (confirmed live — e.g. a real "Buy 3 Get 1
+    Free" product returned set4_price = set1_price × 4, the plain
+    undiscounted total, despite the SAME response's promo_discount_amount:
+    25 / promo_discount_step: 4 describing a real, active 25%-at-4-units
+    rule). Apply it here from those real numeric fields whenever set4 looks
+    un-discounted (≈ set1 × 4) — driven only by the API's own numbers, no
+    promo-label text matching or hardcoded offer IDs. */
+function resolveSetPricing(p: GqlProduct): Product["setPricing"] {
+  const sp = p.kleverSetPricing;
+  if (!sp) return undefined;
+  const set1 = parseSetPrice(sp.set1_price);
+  const set2 = parseSetPrice(sp.set2_price);
+  let set4 = parseSetPrice(sp.set4_price);
+  const promoDiscountAmount = parseSetPrice(sp.promo_discount_amount);
+  const promoDiscountStep = parseSetPrice(sp.promo_discount_step);
+  const promoLabel = sp.promo_label ?? undefined;
+
+  if (
+    set4 != null &&
+    set1 != null &&
+    promoDiscountStep === 4 &&
+    promoDiscountAmount != null &&
+    promoDiscountAmount > 0 &&
+    promoDiscountAmount < 100 &&
+    Math.abs(set4 - set1 * 4) < 2
+  ) {
+    set4 = Math.round(set4 * (1 - promoDiscountAmount / 100));
+  }
+
+  if (set1 == null && set2 == null && set4 == null) return undefined;
+  return {
+    set1,
+    set2,
+    set4,
+    promoLabel,
+    promoBannerUrl: sp.promo_banner_url ?? undefined,
+    promoDiscountAmount,
+    promoDiscountStep,
+  };
+}
+
 /* ─────────────────────────────────────────────────────────────────
    PUBLIC ADAPTER — single GraphQL product → our Product type
 ───────────────────────────────────────────────────────────────── */
-import { getBrandName } from "./brandLogos";
 import { resolveCountry, resolveOrigin, resolveWarranty } from "./attributeMappings";
 
 export function adaptGqlProduct(p: GqlProduct): Product {
   const [price, originalPrice, maxPrice, currency] = resolvePrices(p);
 
-  /* Brand display name. `p.brand` is the raw mgs_brand option id, which Magento
-     sends as a number, so when neither brand_name nor the local lookup resolves
-     it the chain would yield a number for a field typed — and consumed — as a
-     string (TyreListingCard calls .toLowerCase() on it). Coerce here, keeping
-     undefined as undefined so the `?? ` chains downstream still work. */
-  const resolvedBrandName =
-    p.brand_name ?? getBrandName(p.brand) ?? p.brand ?? (p.name ?? "").split(" ")[0];
+  /* Brand display name. `p.brand` is the raw mgs_brand option id — Magento's
+     ProductInterface exposes no resolved brand_name/brand_logo_url field on
+     this schema (confirmed: neither ever comes back non-null), so `p.brand`
+     is genuinely all that's available here. The real name/logo come from
+     Magento's Klever brand directory (kleverBrands, keyed by this same
+     option id) instead — see resolveBrandInfo() in
+     lib/services/brands.service.ts, applied as a real-data enrichment pass
+     by every route that returns a product list/detail to the client. No
+     local static-map or file-scan substitute is used any more. */
+  const resolvedBrandName = p.brand_name ?? p.brand ?? (p.name ?? "").split(" ")[0];
   const id = String(p.uid ?? p.sku ?? p.url_key ?? Math.random().toString(36).slice(2));
   // url_suffix is typically ".html" — strip it for our internal route /product/[urlKey]
   const urlKey = p.url_key
@@ -214,7 +283,7 @@ export function adaptGqlProduct(p: GqlProduct): Product {
     maxPrice,
     currency,
 
-    image: p.image?.url || FALLBACK_IMAGE,
+    image: p.image?.url ?? "",
     smallImage: p.small_image?.url ?? undefined,
     thumbnail: p.thumbnail?.url ?? undefined,
 
@@ -246,6 +315,7 @@ export function adaptGqlProduct(p: GqlProduct): Product {
       .map((c) => ({ id: c.id ?? null, name: c.name!, urlKey: c.url_key ?? undefined })),
 
     offersId: p.offers != null ? String(p.offers) : undefined,
+    setPricing: resolveSetPricing(p),
 
     badge: originalPrice ? "Sale" : undefined,
     rating: resolveRating(p),
@@ -288,7 +358,28 @@ const EXCLUDED_AGGREGATIONS = new Set([
  * Normalize Magento `aggregations` into UI-ready filter groups.
  * These are the ONLY source of shop filter options — nothing hardcoded.
  */
-export function parseAggregations(data: unknown): FilterGroup[] {
+/**
+ * @param totalCount The result set's real total_count, when known. Enables
+ * the same "hide a no-op facet" pruning Magento's own layered nav applies:
+ * a group stays only if it has 2+ real options, OR exactly 1 option whose
+ * count is LESS than totalCount (so checking it would still narrow the
+ * current result set). A group whose only option's count equals totalCount
+ * can never narrow anything — every currently-matching product already
+ * carries that exact value — and Elasticsuite computes facet aggregations
+ * with each attribute's OWN currently-applied filter excluded (multi-select
+ * behaviour), so a genuinely narrowable attribute (Width, Brand, ...)
+ * naturally comes back with 2+ sibling values even when only one product
+ * matches overall; an attribute nobody is filtering by just reflects the
+ * single value already present in the narrow result set. Confirmed live
+ * (Puppeteer): a single-product filtered /tyres result showed only Width/
+ * Height/Rim/Brand (each with 2+ options) — Pattern/Warranty/Year/Origin/
+ * Tyres Category (each pinned to that one product's single value) were
+ * absent from the sidebar; a keyword search showed "Filter by EV Tyre"
+ * (1 option, count 3 of 150 — a real narrowing choice) but not "Filter by
+ * Origin" (1 option, count 150 of 150 — a no-op). Purely count-driven, no
+ * attribute-code allowlist/blocklist. Omit totalCount to skip pruning
+ * entirely (existing callers that don't have a total in hand). */
+export function parseAggregations(data: unknown, totalCount?: number): FilterGroup[] {
   const aggs = (data as GqlProductsResponse)?.data?.products?.aggregations;
   if (!Array.isArray(aggs)) return [];
 
@@ -305,7 +396,12 @@ export function parseAggregations(data: unknown): FilterGroup[] {
           count: Number(o.count ?? 0),
         })),
     }))
-    .filter((g) => g.options.length > 0);
+    .filter((g) => g.options.length > 0)
+    .filter((g) => {
+      if (totalCount == null) return true;
+      if (g.options.length >= 2) return true;
+      return g.options[0].count < totalCount;
+    });
 }
 
 
@@ -336,7 +432,7 @@ export function parseProductDetail(data: unknown): ProductDetail | null {
   const gallery = (item.media_gallery ?? [])
     .filter((g) => g?.url)
     .map((g) => ({ url: g.url as string, label: g.label || item.name || "" }));
-  const mainImage = item.image?.url || gallery[0]?.url || FALLBACK_IMAGE;
+  const mainImage = item.image?.url || gallery[0]?.url || "";
 
   return {
     ...base,

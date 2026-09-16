@@ -18,7 +18,12 @@ const CART_RESPONSE = `
   items {
     uid
     quantity
-    prices { row_total { value currency } price { value currency } }
+    prices {
+      row_total { value currency }
+      price { value currency }
+      price_including_tax { value currency }
+      row_total_including_tax { value currency }
+    }
     product { name sku url_key thumbnail { url label } }
   }
 `;
@@ -133,6 +138,23 @@ export const CART_MUTATIONS = {
     }
   }`,
 
+  // 10b. setKleverInstallerSelection (Klever module — requires the
+  // x-klever-api-key header, already sent by magentoHeaders()). Mirrors the
+  // live storelocator/ajax/saveinstaller controller: writes delivery_mode /
+  // pickup_store / pickup_date / pickup_time onto the quote directly and
+  // sets the matching shipping method — bypassing the standard REST
+  // shipping-information API the same way the live checkout does.
+  setInstallerSelection: `mutation SetInstaller($input: KleverInstallerSelectionInput!) {
+    setKleverInstallerSelection(input: $input) {
+      success
+      message
+      subtotal
+      shipping_amount
+      shipping_formatted
+      grand_total
+    }
+  }`,
+
   // 10. setShippingMethodsOnCart
   setShippingMethod: `mutation Sm($cartId: String!, $carrier: String!, $method: String!) {
     setShippingMethodsOnCart(
@@ -161,6 +183,17 @@ export const CART_MUTATIONS = {
       input: {
         cart_id: $cartId
         billing_address: { address: $addr }
+      }
+    ) {
+      cart { id }
+    }
+  }`,
+
+  setBillingSameAsShipping: `mutation BlSame($cartId: String!) {
+    setBillingAddressOnCart(
+      input: {
+        cart_id: $cartId
+        billing_address: { same_as_shipping: true }
       }
     ) {
       cart { id }

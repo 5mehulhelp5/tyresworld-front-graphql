@@ -12,10 +12,10 @@ import type { StoreConfig } from "@/lib/services/store.service";
 const FALLBACK: StoreConfig = {
   storeCode: "default",
   storeName: "TyresWorld",
-  locale: "en_SA",
-  currencyCode: "SAR",
-  baseCurrencyCode: "SAR",
-  countryId: "SA",
+  locale: "en_AE",
+  currencyCode: "AED",
+  baseCurrencyCode: "AED",
+  countryId: "AE",
   rootCategoryUid: "",
   copyright: "",
 };

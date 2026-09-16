@@ -26,10 +26,10 @@ export interface StoreConfig {
 export const DEFAULT_STORE_CONFIG: StoreConfig = {
   storeCode: "default",
   storeName: "TyresWorld",
-  locale: "en_SA",
-  currencyCode: "SAR",
-  baseCurrencyCode: "SAR",
-  countryId: "SA",
+  locale: "en_AE",
+  currencyCode: "AED",
+  baseCurrencyCode: "AED",
+  countryId: "AE",
   rootCategoryUid: "",
   copyright: "",
 };

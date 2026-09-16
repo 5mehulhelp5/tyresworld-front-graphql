@@ -98,5 +98,9 @@ export function magentoHeaders(locale?: string): HeadersInit {
     const creds = Buffer.from(`${user.trim()}:${pass.trim()}`).toString("base64");
     h["Authorization"] = `Basic ${creds}`;
   }
+  const kleverKey = process.env.KLEVER_API_KEY || "0ca70f284245286699c81f8b4e7744bca617db292fde83e9";
+  if (kleverKey) {
+    h["x-klever-api-key"] = kleverKey.trim();
+  }
   return h;
 }

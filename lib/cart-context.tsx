@@ -285,7 +285,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const count     = cart?.total_quantity ?? 0;
   const subtotal  = cart?.prices?.subtotal_excluding_tax?.value ?? 0;
   const grandTotal = cart?.prices?.grand_total?.value ?? 0;
-  const currency  = cart?.prices?.grand_total?.currency ?? "SAR";
+  const currency  = cart?.prices?.grand_total?.currency ?? "AED";
 
   return (
     <CartContext.Provider

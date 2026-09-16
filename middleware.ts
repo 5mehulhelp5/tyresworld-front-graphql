@@ -1,8 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
+ * Removed synthetic listing pages — Magento has no real attribute
+ * distinguishing on-road from off-road/4x4 tyres, and the product filter for
+ * these was never actually wired, so both pages silently rendered the entire
+ * unfiltered Tyres catalog under a misleading curated title. Redirected here
+ * (not just in the [locale]/[...slug] page component) so this is a real HTTP
+ * 307, not a client-side meta-refresh — a redirect() thrown after the root
+ * layout starts streaming degrades to that weaker form.
+ */
+const REMOVED_SYNTHETIC_SLUGS = new Set(["on-road-tires", "off-road-tires-4x4"]);
+
+/**
  * Edge middleware:
  *  - Redirects the bare root "/" to the default locale.
+ *  - Redirects removed synthetic listing pages to the real Tyres category.
  *  - Adds baseline security headers to every (non-asset) response.
  */
 export function middleware(req: NextRequest) {
@@ -13,6 +25,15 @@ export function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = "/en";
     return NextResponse.redirect(url);
+  }
+
+  const segments = pathname.split("/").filter(Boolean);
+  const locale = segments[0] === "ar" ? "ar" : "en";
+  const lastSegment = segments[segments.length - 1];
+  if (segments.length <= 2 && lastSegment && REMOVED_SYNTHETIC_SLUGS.has(lastSegment)) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/${locale}/tyres`;
+    return NextResponse.redirect(url, 307);
   }
 
   const res = NextResponse.next();

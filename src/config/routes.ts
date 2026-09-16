@@ -3,8 +3,6 @@
 export const ROUTES = {
   home:      (locale = "en") => `/${locale}`,
   tyres:     (locale = "en") => `/${locale}/tyres`,
-  onRoad:    (locale = "en") => `/${locale}/on-road-tires`,
-  offRoad:   (locale = "en") => `/${locale}/off-road-tires-4x4`,
   evTires:   (locale = "en") => `/${locale}/ev-tires`,
   runFlat:   (locale = "en") => `/${locale}/run-flat-tires`,
   category:  (locale = "en", slug: string) => `/${locale}/${slug}`,
@@ -29,18 +27,21 @@ export interface CategoryHero {
 }
 
 export const CATEGORY_HERO: Record<string, CategoryHero> = {
+  /* No heroTitle here — "tyres" is a real Magento category (uid MTg=)
+     with its own real category_page_title ("Buy All Types of Tyres
+     Online in UAE"), so a hardcoded string here would shadow it exactly
+     like the car-battery bug documented below (CategoryPageInner's
+     displayTitle checks heroTitle before the real category_page_title).
+     showTyreFinder is a real UI-behaviour flag, not content, so it stays. */
   "tyres": {
-    heroTitle: "Buy Car Tyres Online in UAE – Premium Quality, Great Prices",
     showTyreFinder: true,
   },
-  "on-road-tires": {
-    heroTitle: "Buy On-Road Car Tyres Online in the UAE",
-    showTyreFinder: true,
-  },
-  "off-road-tires-4x4": {
-    heroTitle: "Buy Off-Road & 4x4 Tyres Online in the UAE",
-    showTyreFinder: true,
-  },
+  /* No "on-road-tires" / "off-road-tires-4x4" entries — removed. Magento has
+     no real attribute distinguishing on-road from off-road/4x4 tyres, and the
+     product filter for these was never actually wired (see git history /
+     app/api/category-page/route.ts), so both pages silently rendered the
+     entire unfiltered Tyres catalog under a misleading curated title. Both
+     slugs now redirect to the real root "tyres" category instead. */
   "electric-vehicle-tyres-uae": {
     heroTitle: "Electric Vehicle Tyres in UAE",
     showTyreFinder: false,

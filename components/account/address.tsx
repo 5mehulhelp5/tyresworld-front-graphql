@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -43,9 +43,50 @@ export type Props = {
   onBack: () => void;
 };
 
-// ── Constants ─────────────────────────────────────────────────────
+// ── Fallback Fields ────────────────────────────────────────────────
 
-const CONTACT_CODES = new Set(["firstname", "lastname", "company", "telephone"]);
+const FALLBACK_FIELDS: FormField[] = [
+  { code: "firstname", label: "First Name", frontend_input: "text", frontend_class: null, default_value: null, is_required: true, options: [] },
+  { code: "lastname", label: "Last Name", frontend_input: "text", frontend_class: null, default_value: null, is_required: true, options: [] },
+  { code: "company", label: "Company", frontend_input: "text", frontend_class: null, default_value: null, is_required: false, options: [] },
+  { code: "telephone", label: "Phone Number", frontend_input: "text", frontend_class: null, default_value: null, is_required: true, options: [] },
+  { code: "street", label: "Street Address", frontend_input: "text", frontend_class: null, default_value: null, is_required: true, options: [] },
+  {
+    code: "country_id",
+    label: "Country",
+    frontend_input: "select",
+    frontend_class: null,
+    default_value: "AE",
+    is_required: true,
+    options: [
+      { value: "AE", label: "United Arab Emirates" },
+      { value: "SA", label: "Saudi Arabia" },
+      { value: "QA", label: "Qatar" },
+      { value: "KW", label: "Kuwait" },
+      { value: "BH", label: "Bahrain" },
+      { value: "OM", label: "Oman" },
+      { value: "US", label: "United States" },
+      { value: "GB", label: "United Kingdom" },
+      { value: "IN", label: "India" },
+    ],
+  },
+  { code: "city", label: "City", frontend_input: "text", frontend_class: null, default_value: null, is_required: true, options: [] },
+  { code: "postcode", label: "Zip/Postal Code", frontend_input: "text", frontend_class: null, default_value: null, is_required: false, options: [] },
+];
+
+const CONTACT_ORDER = ["firstname", "lastname", "company", "telephone"];
+const ADDRESS_ORDER = ["street", "country_id", "city", "postcode"];
+const CONTACT_CODES = new Set(CONTACT_ORDER);
+const EXCLUDED_CODES = new Set(["region", "region_id", "region_code", "vat_id", "taxvat"]);
+
+function isExcludedField(f: FormField) {
+  if (EXCLUDED_CODES.has(f.code.toLowerCase())) return true;
+  const label = (f.label || "").toLowerCase();
+  if (label.includes("state") || label.includes("province") || label.includes("vat")) {
+    return true;
+  }
+  return false;
+}
 
 const FORM_CODE: Record<"create" | "edit", string> = {
   create: "customer_register_address",
@@ -72,7 +113,7 @@ function getInitialValues(
         case "street":      v = (editingAddress.street ?? []).join("\n"); break;
         case "city":        v = editingAddress.city      ?? ""; break;
         case "postcode":    v = editingAddress.postcode  ?? ""; break;
-        case "country_id":  v = editingAddress.country_code ?? ""; break;
+        case "country_id":  v = editingAddress.country_code ?? "AE"; break;
         case "region":      v = editingAddress.region?.region      ?? ""; break;
         case "region_id":   v = String(editingAddress.region?.region_id ?? ""); break;
         case "region_code": v = editingAddress.region?.region_code ?? ""; break;
@@ -83,7 +124,7 @@ function getInitialValues(
       switch (f.code) {
         case "firstname":  v = customer?.firstname ?? ""; break;
         case "lastname":   v = customer?.lastname  ?? ""; break;
-        case "country_id": v = f.default_value ?? "SA"; break;
+        case "country_id": v = f.default_value ?? "AE"; break;
         default:           v = f.default_value ?? ""; break;
       }
     }
@@ -144,8 +185,8 @@ function buildInput(
 // ── Field renderer ────────────────────────────────────────────────
 
 const INPUT_CLS =
-  "w-full bg-white border border-gray-300 rounded px-4 py-2.5 text-sm text-gray-900 " +
-  "focus:outline-none focus:ring-1 focus:ring-black focus:border-black";
+  "w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-gray-400 rounded-md px-3.5 py-2.5 text-sm text-gray-900 " +
+  "focus:outline-none transition-colors";
 
 function FieldRenderer({
   field,
@@ -158,50 +199,75 @@ function FieldRenderer({
 }) {
   const type = field.frontend_input.toUpperCase();
 
+  // Normalize label display
+  let displayLabel = field.label;
+  if (field.code === "telephone" && displayLabel.toLowerCase().includes("telephone")) {
+    displayLabel = "Phone Number";
+  }
+
   const label = (
-    <label className="text-[11px] font-bold text-gray-700 uppercase mb-1.5 block">
-      {field.label}
+    <label className="text-sm font-medium text-gray-900 mb-1.5 block">
+      {displayLabel}
       {field.is_required && " *"}
     </label>
   );
 
-  if (type === "MULTILINE") {
+  if (type === "MULTILINE" || field.code === "street") {
     return (
-      <div className="sm:col-span-2">
+      <div>
         {label}
-        <textarea
+        <input
+          type="text"
           required={field.is_required}
-          rows={3}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className={INPUT_CLS + " resize-none"}
+          className={INPUT_CLS}
         />
       </div>
     );
   }
 
-  if (type === "SELECT") {
+  if (type === "SELECT" || field.code === "country_id") {
+    // If field options is empty (fallback), ensure UAE & others are listed
+    const options = field.options && field.options.length > 0 ? field.options : [
+      { value: "AE", label: "United Arab Emirates" },
+      { value: "SA", label: "Saudi Arabia" },
+      { value: "QA", label: "Qatar" },
+      { value: "KW", label: "Kuwait" },
+      { value: "BH", label: "Bahrain" },
+      { value: "OM", label: "Oman" },
+      { value: "US", label: "United States" },
+      { value: "GB", label: "United Kingdom" },
+      { value: "IN", label: "India" },
+    ];
+
     return (
-      <div>
+      <div className="relative">
         {label}
-        <select
-          required={field.is_required}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className={INPUT_CLS}
-        >
-          <option value="">— Select —</option>
-          {field.options.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            required={field.is_required}
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className={`${INPUT_CLS} appearance-none pr-10`}
+          >
+            <option value="">— Select —</option>
+            {options.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <ChevronDown
+            size={16}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600"
+          />
+        </div>
       </div>
     );
   }
 
   if (type === "BOOLEAN") {
     return (
-      <div className="flex items-center gap-2.5 pt-5">
+      <div className="flex items-center gap-2.5 pt-2">
         <input
           type="checkbox"
           id={`addr-field-${field.code}`}
@@ -210,7 +276,7 @@ function FieldRenderer({
           className="w-4 h-4 accent-[#ed1c24] cursor-pointer"
         />
         <label htmlFor={`addr-field-${field.code}`} className="text-sm text-gray-800 cursor-pointer">
-          {field.label}
+          {displayLabel}
         </label>
       </div>
     );
@@ -242,38 +308,35 @@ export default function DynamicAddressForm({
 }: Props) {
   const [fields,     setFields]     = useState<FormField[]>([]);
   const [loading,    setLoading]    = useState(true);
-  const [fetchError, setFetchError] = useState("");
   const [values,     setValues]     = useState<Record<string, string>>({});
   const [saving,     setSaving]     = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const formCode = FORM_CODE[mode];
 
-  // Fetch form field definitions from Magento
+  // Fetch form field definitions from Magento, fallback to FALLBACK_FIELDS if unavailable
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setFetchError("");
 
     fetch(`/api/address-form?formCode=${encodeURIComponent(formCode)}`)
       .then(r => r.json())
       .then((j: { items?: FormField[]; error?: string }) => {
         if (!active) return;
-        if (j.error) { setFetchError(j.error); setLoading(false); return; }
-        const items = j.items ?? [];
+        const items = j.items && j.items.length > 0 ? j.items : FALLBACK_FIELDS;
         setFields(items);
         setValues(getInitialValues(items, mode, editingAddress, customer));
         setLoading(false);
       })
-      .catch(e => {
+      .catch(() => {
         if (!active) return;
-        setFetchError(e instanceof Error ? e.message : "Failed to load form fields");
+        setFields(FALLBACK_FIELDS);
+        setValues(getInitialValues(FALLBACK_FIELDS, mode, editingAddress, customer));
         setLoading(false);
       });
 
     return () => { active = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formCode]);
+  }, [formCode, mode, editingAddress, customer]);
 
   // Re-populate values when the address being edited changes
   useEffect(() => {
@@ -330,22 +393,26 @@ export default function DynamicAddressForm({
     );
   }
 
-  // ── Fetch error ──
-  if (fetchError) {
-    return (
-      <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-        {fetchError}
-      </div>
-    );
-  }
+  // Sort contact & address fields according to standard clean ordering
+  const activeFields = fields.length > 0 ? fields : FALLBACK_FIELDS;
 
-  const contactFields = fields.filter(f => CONTACT_CODES.has(f.code) && f.frontend_input.toUpperCase() !== "HIDDEN");
-  const addressFields = fields.filter(f => !CONTACT_CODES.has(f.code) && f.frontend_input.toUpperCase() !== "HIDDEN");
-  const hiddenFields  = fields.filter(f => f.frontend_input.toUpperCase() === "HIDDEN");
+  const contactFields = activeFields
+    .filter(f => CONTACT_CODES.has(f.code) && f.frontend_input.toUpperCase() !== "HIDDEN" && !isExcludedField(f))
+    .sort((a, b) => CONTACT_ORDER.indexOf(a.code) - CONTACT_ORDER.indexOf(b.code));
+
+  const addressFields = activeFields
+    .filter(f => !CONTACT_CODES.has(f.code) && f.frontend_input.toUpperCase() !== "HIDDEN" && !isExcludedField(f))
+    .sort((a, b) => {
+      const ia = ADDRESS_ORDER.indexOf(a.code);
+      const ib = ADDRESS_ORDER.indexOf(b.code);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
+  const hiddenFields = activeFields.filter(f => f.frontend_input.toUpperCase() === "HIDDEN" && !isExcludedField(f));
 
   return (
-    <div>
-      <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-4 mb-6">
+    <div className="w-full">
+      <h1 className="text-2xl sm:text-3xl font-normal uppercase tracking-wide text-gray-900 mb-8">
         {mode === "edit" ? "EDIT ADDRESS" : "ADD NEW ADDRESS"}
       </h1>
 
@@ -364,11 +431,11 @@ export default function DynamicAddressForm({
 
         {/* Contact Information */}
         {contactFields.length > 0 && (
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-gray-900 mb-4 border-b border-gray-100 pb-2">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-sm font-bold text-gray-900">
               Contact Information
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
               {contactFields.map(f => (
                 <FieldRenderer
                   key={f.code}
@@ -383,11 +450,11 @@ export default function DynamicAddressForm({
 
         {/* Address */}
         {addressFields.length > 0 && (
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-gray-900 mb-4 border-b border-gray-100 pb-2">
+          <div className="flex flex-col gap-4 mt-2">
+            <h2 className="text-sm font-bold text-gray-900">
               Address
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
               {addressFields.map(f => (
                 <FieldRenderer
                   key={f.code}
@@ -401,20 +468,20 @@ export default function DynamicAddressForm({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 pt-4">
           <button
             type="submit"
             disabled={saving}
-            className="bg-black hover:bg-[#ed1c24] text-white px-6 py-2.5 rounded font-black text-xs uppercase tracking-wider transition-colors disabled:opacity-60"
+            className="bg-black hover:bg-gray-800 text-white px-6 py-2.5 rounded font-semibold text-xs transition-colors disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save Address"}
           </button>
           <button
             type="button"
             onClick={onBack}
-            className="text-xs font-bold text-gray-600 hover:text-black uppercase tracking-wider transition-colors"
+            className="text-xs font-semibold text-gray-600 hover:text-black uppercase tracking-wider transition-colors"
           >
-            Back
+            Cancel
           </button>
         </div>
 

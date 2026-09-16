@@ -24,7 +24,6 @@ import {
   Layers,
   type LucideIcon,
 } from "lucide-react";
-import { MAIN_NAV, navHref, navLabel } from "@/src/config/navigation";
 
 function getCategoryIcon(id: string, slug: string): LucideIcon {
   const key = `${id} ${slug}`.toLowerCase();
@@ -48,12 +47,28 @@ function getCategoryIcon(id: string, slug: string): LucideIcon {
   return Layers;
 }
 
+import { useEffect } from "react";
+import { type NavItem, navHref, navLabel } from "@/src/config/navigation";
+
 /**
  * "Browse All Categories" rail — the left column of the hero grid.
  */
-export default function CategoryRail({ locale }: { locale: string }) {
+export default function CategoryRail({ locale, initialMenu }: { locale: string; initialMenu?: NavItem[] }) {
+  const [menu, setMenu] = useState<NavItem[]>(initialMenu ?? []);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const isAr = locale === "ar";
+
+  useEffect(() => {
+    if (initialMenu && initialMenu.length > 0) return;
+    fetch(`/api/menu?locale=${encodeURIComponent(locale)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.menu && Array.isArray(data.menu)) {
+          setMenu(data.menu);
+        }
+      })
+      .catch(() => {});
+  }, [locale, initialMenu]);
 
   return (
     <div className="ptr-cat-rail relative z-40 rounded-xl shadow-sm border border-gray-200 bg-white" onMouseLeave={() => setHoveredId(null)}>
@@ -64,7 +79,7 @@ export default function CategoryRail({ locale }: { locale: string }) {
       </div>
 
       <div className="ptr-cat-rail-body">
-        {MAIN_NAV.map((item) => {
+        {menu.map((item) => {
           const Icon = getCategoryIcon(item.id, item.slug);
           const hasChildren = !!item.children?.length;
           const isHovered = hoveredId === item.id;

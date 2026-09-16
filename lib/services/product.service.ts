@@ -20,6 +20,7 @@ import {
   type ProductDetail,
 } from "@/lib/magento";
 import { APP_CONFIG } from "@/src/config/app-config";
+import { resolveBrandInfo } from "@/lib/services/brands.service";
 import type { Product } from "@/lib/data";
 
 export interface ProductListResult {
@@ -84,7 +85,7 @@ export async function getProducts(params: {
   }
 
   const wrapper = { data: r.data } as GqlProductsResponse;
-  const products = parseGraphqlResponse(wrapper);
+  const products = await resolveBrandInfo(parseGraphqlResponse(wrapper), params.store);
   const pd = r.data?.products;
 
   return {
@@ -138,7 +139,7 @@ export async function getProductDetail(params: {
     return { ok: r.ok, status: r.ok ? 200 : r.status, product: null, error: firstError(r) };
   }
 
-  const product = parseProductDetail({ data: r.data } as GqlProductDetailResponse);
+  let product = parseProductDetail({ data: r.data } as GqlProductDetailResponse);
   if (!product) {
     return { ok: true, status: 404, product: null, error: "Product not found" };
   }
@@ -146,6 +147,8 @@ export async function getProductDetail(params: {
   if (product.bikeTyreTypeId) {
     product.bikeTyreType = await resolveBikeTyreType(product.bikeTyreTypeId, params.store);
   }
+
+  [product] = await resolveBrandInfo([product], params.store);
 
   return { ok: true, status: 200, product };
 }

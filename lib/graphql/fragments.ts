@@ -5,6 +5,25 @@
    Append the fragment string to any query document that spreads it.
 ───────────────────────────────────────────────────────────────── */
 
+/** Real per-set prices (set1/2/4 — a full pack, not unit price × qty) and
+    any active bundle promo, from the Klever custom module. Requires the
+    x-klever-api-key header (see magentoHeaders) — same auth gate as
+    kleverMainMenu. Spliced into every product query that feeds a "Set of N"
+    price display, so that number reflects Magento's own pricing/promo
+    rules instead of a naive unitPrice × qty multiplication. */
+export const KLEVER_SET_PRICING_FIELDS = `
+  kleverSetPricing {
+    set1_price
+    set2_price
+    set4_price
+    promo_rule_id
+    promo_label
+    promo_banner_url
+    promo_discount_amount
+    promo_discount_step
+  }
+`;
+
 /** Minimal fields for product cards / listings (grids, carousels, search). */
 export const PRODUCT_CARD_FRAGMENT = /* GraphQL */ `
   fragment ProductCardFields on ProductInterface {
@@ -25,6 +44,7 @@ export const PRODUCT_CARD_FRAGMENT = /* GraphQL */ `
     country
     origin
     warranty_period
+    ${KLEVER_SET_PRICING_FIELDS}
   }
 `;
 
@@ -58,5 +78,6 @@ export const PRODUCT_DETAIL_FRAGMENT = /* GraphQL */ `
         discount      { amount_off percent_off }
       }
     }
+    ${KLEVER_SET_PRICING_FIELDS}
   }
 `;

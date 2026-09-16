@@ -1,39 +1,5 @@
 {
   "en": {
-    "deliveryOptions": [
-      {
-        "id": "install_outlet",
-        "title": "Install at Outlet",
-        "subtitle": "Visit our outlet for professional installation",
-        "icon": "store"
-      },
-      {
-        "id": "mobile_van",
-        "title": "Mobile Van Service",
-        "subtitle": "Our mobile van comes to your location",
-        "icon": "truck"
-      },
-      {
-        "id": "free_shipping",
-        "title": "Free Shipping",
-        "subtitle": "Delivery without fitment service",
-        "icon": "package"
-      }
-    ],
-    "mobileVans": [
-      {
-        "id": "mv_dxb",
-        "name": "Mobile Van Fitting (Dubai & Northern Emirates)",
-        "address": "Across Dubai, Sharjah, Ajman",
-        "fee": "AED 150.00"
-      },
-      {
-        "id": "mv_ad",
-        "name": "Mobile Van Fitting (Abu Dhabi & Al Ain)",
-        "address": "Across Abu Dhabi & Al Ain",
-        "fee": "AED 150.00"
-      }
-    ],
     "timeSlots": [
       "09:00 AM - 01:00 PM",
       "01:00 PM - 05:00 PM",
@@ -41,40 +7,6 @@
     ]
   },
   "ar": {
-    "deliveryOptions": [
-      {
-        "id": "install_outlet",
-        "title": "التركيب في المركز",
-        "subtitle": "قم بزيارة مركزنا للتركيب الاحترافي",
-        "icon": "store"
-      },
-      {
-        "id": "mobile_van",
-        "title": "خدمة الفان المتنقل",
-        "subtitle": "الفان المتنقل يصل إلى موقعك",
-        "icon": "truck"
-      },
-      {
-        "id": "free_shipping",
-        "title": "توصيل مجاني",
-        "subtitle": "توصيل بدون خدمة التركيب",
-        "icon": "package"
-      }
-    ],
-    "mobileVans": [
-      {
-        "id": "mv_dxb",
-        "name": "خدمة الفان المتنقل (دبي والإمارات الشمالية)",
-        "address": "كافة مناطق دبي والشارقة وعجمان",
-        "fee": "150.00 د.إ"
-      },
-      {
-        "id": "mv_ad",
-        "name": "خدمة الفان المتنقل (أبو ظبي والعين)",
-        "address": "كافة مناطق أبو ظبي والعين",
-        "fee": "150.00 د.إ"
-      }
-    ],
     "timeSlots": [
       "09:00 صباحاً - 01:00 مساءً",
       "01:00 مساءً - 05:00 مساءً",

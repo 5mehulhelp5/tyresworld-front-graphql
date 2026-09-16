@@ -152,13 +152,20 @@ export default function FilterPanel({
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const SIZE_CODES = new Set([
+  /* Width/Height/Rim (front + rear/staggered variants) are deliberately
+     hidden from this drawer — by explicit product decision, not because
+     they're wrong or unavailable. They're still fully functional: the
+     sticky "Search Tyre Size" finder sets them, they still reach the API
+     as real filter params, and results still narrow correctly — this only
+     hides them from being duplicated as checkboxes here. Every other real
+     aggregation (Brand, Pattern, etc.) still shows, in Magento's own order. */
+  const SIZE_FILTER_CODES = new Set([
     "width", "height", "haight", "rim",
     "width_rear", "rear_width", "rwidth",
     "haight_rear", "height_rear", "rear_height", "rheight",
-    "rim_rear", "rear_rim", "rrim"
+    "rim_rear", "rear_rim", "rrim",
   ]);
-  const visibleFilters = filters.filter(f => !SIZE_CODES.has(f.code.toLowerCase()));
+  const visibleFilters = filters.filter((f) => !SIZE_FILTER_CODES.has(f.code.toLowerCase()));
 
   /* Close on Escape key */
   useEffect(() => {

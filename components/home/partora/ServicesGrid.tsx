@@ -1,37 +1,25 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { MAIN_NAV, navHref, navLabel } from "@/src/config/navigation";
+import { navHref, navLabel } from "@/src/config/navigation";
+import { getMainMenu } from "@/lib/services/menu.service";
+import { storeCode } from "@/lib/i18n";
 
-/**
- * Car Services grid.
- *
- * The list is not written out here — it is read from the `car-services`
- * entry in src/config/navigation.ts, the same source the header dropdown
- * renders. That means this section and the menu always show the identical
- * nine services, in the identical order, with the identical labels and
- * routes, in both locales. Adding a service to the nav adds it here.
- *
- * Only the artwork is mapped locally, keyed by the nav child's stable id.
- */
 const ICONS: Record<string, string> = {
-  "svc-tyre": "/service-icons/service-icons-01.png",       // car on lift + tyres
-  "svc-battery": "/service-icons/service-icons-03.png",    // battery, +/- terminals
-  "svc-ac": "/service-icons/service-icons-06.png",         // snowflake + wrench
-  "svc-brake": "/service-icons/service-icons-04.png",      // brake disc + pad
-  "svc-oil": "/service-icons/service-icons-05.png",        // oil can + drip
-  "svc-mech": "/service-icons/service-icons-08.png",       // inspection clipboard
-  "svc-alignment": "/service-icons/service-icons-02.png",  // axle + toe arrows
-  /* No balancing-specific icon ships in /public/service-icons (there are
-     eight for nine services). The axle pair is reused as the nearest
-     honest match — drop a ninth icon in and change this one line. */
+  "svc-tyre": "/service-icons/service-icons-01.png",
+  "svc-battery": "/service-icons/service-icons-03.png",
+  "svc-ac": "/service-icons/service-icons-06.png",
+  "svc-brake": "/service-icons/service-icons-04.png",
+  "svc-oil": "/service-icons/service-icons-05.png",
+  "svc-mech": "/service-icons/service-icons-08.png",
+  "svc-alignment": "/service-icons/service-icons-02.png",
   "svc-balancing": "/service-icons/service-icons-02.png",
-  "svc-rim": "/service-icons/service-icons-07.png",        // rim + warning
+  "svc-rim": "/service-icons/service-icons-07.png",
 };
 
-export default function ServicesGrid({ locale = "en" }: { locale?: string }) {
+export default async function ServicesGrid({ locale = "en" }: { locale?: string }) {
   const isAr = locale === "ar";
-
-  const group = MAIN_NAV.find((item) => item.id === "car-services");
+  const menu = await getMainMenu(storeCode(isAr ? "ar" : "en"));
+  const group = menu?.find((item) => item.id.includes("service") || item.slug.includes("service"));
   const services = group?.children ?? [];
 
   if (services.length === 0) return null;

@@ -8,7 +8,6 @@ import FullyFittedPriceModal from "@/components/FullyFittedPriceModal";
 import ProductImage from "./ProductImage";
 import type { Product } from "@/lib/data";
 import { type Locale } from "@/lib/i18n";
-import { getBrandLogo } from "@/lib/brandLogos";
 import { useOfferLabels } from "@/lib/useOfferLabels";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
@@ -115,7 +114,7 @@ export default function TyreListingCard({
       : null;
 
   const brandLabel = product.brandName ?? String(product.brand ?? "");
-  const brandLogo = product.brandLogoUrl ?? getBrandLogo(product.brand) ?? getBrandLogo(product.brandName);
+  const brandLogo = product.brandLogoUrl;
   const brandSlug = product.brandName?.toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/(^-|-$)/g, "");
   const brandHref = brandSlug
     ? `/${locale}/tyres/brand/${brandSlug}`
@@ -153,7 +152,37 @@ export default function TyreListingCard({
      (motorcycle fitting needs a staff consultation, unlike car tyres). */
   const isOutOfStock = isBike || product.inStock === false || product.price <= 0;
   const unitPrice = product.price > 0 ? product.price : 0;
-  const setPrice = unitPrice * qty;
+
+  /* Real per-set price from Magento's own pricing/promo rules (kleverSetPricing)
+     when the selected qty is a real set tier (1/2/4) — set4 already has any
+     matching bulk-buy discount applied server-side (resolveSetPricing in
+     lib/magento.ts), computed from the API's own real promo_discount_amount/
+     promo_discount_step fields, not guessed client-side. Falls back to a
+     plain unitPrice × qty multiplication for any other quantity, or if the
+     backend returned no set pricing for this SKU at all. */
+  let realSetPrice =
+    qty === 1 ? product.setPricing?.set1
+    : qty === 2 ? product.setPricing?.set2
+    : qty === 4 ? product.setPricing?.set4
+    : undefined;
+
+  /* Quantities beyond the API's own set1/set2/set4 tiers (e.g. 8, two sets
+     of 4) — extend the SAME real discount rate/step the API already
+     returned, rather than losing it above the highest tier Magento quotes. */
+  const { promoDiscountAmount, promoDiscountStep } = product.setPricing ?? {};
+  if (
+    realSetPrice == null &&
+    promoDiscountStep === 4 &&
+    promoDiscountAmount != null &&
+    promoDiscountAmount > 0 &&
+    promoDiscountAmount < 100 &&
+    qty > 0 &&
+    qty % 4 === 0
+  ) {
+    realSetPrice = qty * unitPrice * (1 - promoDiscountAmount / 100);
+  }
+
+  const setPrice = realSetPrice ?? unitPrice * qty;
 
   async function handleAddToCart() {
     if (adding || cartAdded || isOutOfStock) return;

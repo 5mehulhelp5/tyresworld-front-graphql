@@ -1,7 +1,11 @@
 /* ─────────────────────────────────────────────────────────────────
    All Magento GraphQL queries (read-only operations).
 ───────────────────────────────────────────────────────────────── */
-import { PRODUCT_CARD_FRAGMENT, PRODUCT_DETAIL_FRAGMENT } from "./graphql/fragments";
+import {
+  PRODUCT_CARD_FRAGMENT,
+  PRODUCT_DETAIL_FRAGMENT,
+  KLEVER_SET_PRICING_FIELDS,
+} from "./graphql/fragments";
 
 // ── Shared field fragments ────────────────────────────────────────
 
@@ -53,7 +57,12 @@ const CART_FIELDS = `
   items {
     uid
     quantity
-    prices { row_total { value currency } price { value currency } }
+    prices {
+      row_total { value currency }
+      price { value currency }
+      price_including_tax { value currency }
+      row_total_including_tax { value currency }
+    }
     product { name sku url_key thumbnail { url label } }
   }
   available_payment_methods { code title }
@@ -131,6 +140,22 @@ export const CUSTOMER_ORDER_DETAIL_QUERY = /* GraphQL */ `
 export const CART_QUERIES = {
   get: `query GetCart($cartId: String!) { cart(cart_id: $cartId) { ${CART_FIELDS} } }`,
   customerCartId: `query CustomerCart { customerCart { id } }`,
+  /** Reads back the installer/delivery choice already saved on a cart
+      (setKleverInstallerSelection in lib/mutations.ts writes it). Klever
+      module — requires the x-klever-api-key header. */
+  getInstallerSelection: `query KleverInstallerSelection($cartId: String!) {
+    kleverInstallerSelection(cart_id: $cartId) {
+      has_selection
+      delivery_mode
+      delivery_label
+      store_id
+      store_name
+      pickup_date
+      pickup_time
+      pickup_location
+      shipping_method_code
+    }
+  }`,
 };
 
 // ── Product Queries ───────────────────────────────────────────────
@@ -283,6 +308,7 @@ export const CATEGORY_PAGE_QUERY = /* GraphQL */ `
         country
         origin
         warranty_period
+        ${KLEVER_SET_PRICING_FIELDS}
         image { url label }
         categories { id name url_key }
         small_image { url label }
@@ -348,6 +374,7 @@ export const CATEGORY_PRODUCTS_BY_UID_QUERY = /* GraphQL */ `
         country
         origin
         warranty_period
+        ${KLEVER_SET_PRICING_FIELDS}
         image { url label }
         categories { id name url_key }
         price_range {
@@ -548,6 +575,7 @@ export const OFFERS_PRODUCTS_QUERY = /* GraphQL */ `
         country
         origin
         warranty_period
+        ${KLEVER_SET_PRICING_FIELDS}
         image { url label }
         categories { id name url_key }
         price_range {
@@ -588,6 +616,294 @@ export const STORE_CONFIG_QUERY = /* GraphQL */ `
   }
 `;
 
+// ── Brands directory (Klever custom module) ───────────────────────
+// Requires the x-klever-api-key header. brand_category groups results
+// ("Tyres", "Battery", "Wheels", "Motorcycle Tyres", "Wheel Alignment"),
+// option_id is the raw mgs_brand attribute option ID (NOT usable as an
+// eq filter value against products() — Elasticsuite indexes this
+// attribute by its label text, confirmed: mgs_brand: {eq: "818"} returns
+// 0 while mgs_brand: {eq: "Continental"} returns real results — use `name`
+// for building a product-listing filter link instead).
+export const KLEVER_BRANDS_QUERY = /* GraphQL */ `
+  query KleverBrands($brandCategory: String, $urlKey: String, $featuredOnly: Boolean) {
+    kleverBrands(brand_category: $brandCategory, url_key: $urlKey, featured_only: $featuredOnly) {
+      brand_id
+      name
+      url_key
+      description
+      image
+      small_image
+      brand_category
+      is_featured
+      sort_order
+      option_id
+    }
+  }
+`;
+
+// ── Blog (Klever module, wraps MGS_Blog) ──────────────────────────
+// Requires the x-klever-api-key header. `content` is only populated when
+// querying a single post by url_key; listing queries get short_content
+// instead (cheaper — full content skipped server-side, not just unused
+// client-side). Both content fields come back Page-Builder HTML-entity-
+// encoded ("&lt;div..." instead of "<div...") — same decode needed as CMS
+// pages — content additionally embeds Magento `{{store url='...'}}`
+// widget directives that need resolving to real links before rendering.
+export const KLEVER_BLOG_POSTS_QUERY = /* GraphQL */ `
+  query KleverBlogPosts(
+    $categoryUrlKey: String
+    $urlKey: String
+    $search: String
+    $pageSize: Int
+    $currentPage: Int
+  ) {
+    kleverBlogPosts(
+      category_url_key: $categoryUrlKey
+      url_key: $urlKey
+      search: $search
+      pageSize: $pageSize
+      currentPage: $currentPage
+    ) {
+      total_count
+      items {
+        post_id
+        title
+        url_key
+        short_content
+        content
+        image
+        thumbnail
+        tags
+        author
+        meta_keywords
+        meta_description
+        published_at
+        created_at
+        categories {
+          category_id
+          title
+          url_key
+        }
+      }
+    }
+  }
+`;
+
+export const KLEVER_BLOG_CATEGORIES_QUERY = /* GraphQL */ `
+  query KleverBlogCategories {
+    kleverBlogCategories {
+      category_id
+      title
+      url_key
+      meta_keywords
+      meta_description
+      sort_order
+    }
+  }
+`;
+
+// ── Installer / pickup stores (Klever custom module) ──────────────
+// Requires the x-klever-api-key header. delivery_mode here uses the SHORT
+// vocabulary ("outlet", "mobilevan") — different from the quote-side
+// delivery_mode used at checkout ("install_at_outlet", "mobile_van_service").
+// Confirmed live: pickupLocations (core Magento MSI) returns zero results —
+// nothing is configured there — while this returns real, active partners
+// matching what the live storefront's own store-locator page shows.
+export const KLEVER_INSTALLER_STORES_QUERY = /* GraphQL */ `
+  query KleverInstallerStores($deliveryMode: String!) {
+    kleverInstallerStores(delivery_mode: $deliveryMode) {
+      stores_id
+      name
+      city
+      address
+      country
+      latitude
+      longitude
+      shipping_amount
+      skip_days
+      cutoff_time
+      skip_hours
+      opening_hours
+    }
+  }
+`;
+
+// ── Public Store Locator (Klever custom module) ───────────────────
+// Requires the x-klever-api-key header. Returns all 26 active stores with
+// complete data (phone, email, coordinates, images, opening hours, etc.)
+export const KLEVER_STORES_QUERY = /* GraphQL */ `
+  query KleverStores($city: String, $urlKey: String, $pageSize: Int, $currentPage: Int) {
+    kleverStores(city: $city, url_key: $urlKey, pageSize: $pageSize, currentPage: $currentPage) {
+      total_count
+      items {
+        stores_id
+        name
+        name_ar
+        url_key
+        address
+        address_ar
+        city
+        city_ar
+        region
+        country
+        postcode
+        phone
+        email
+        latitude
+        longitude
+        image
+        details_image
+        intro
+        description
+        station
+        external_link
+        category
+        opening_hours
+        special_opening_hours
+        delivery_mode
+        installer_type
+        is_mobilevan
+        shipping_amount
+      }
+    }
+  }
+`;
+
+// ── Vehicle Tyre Finder (Klever custom module) ───────────────────
+export const KLEVER_VEHICLE_MAKES_QUERY = /* GraphQL */ `
+  query KleverVehicleMakes {
+    kleverVehicleMakes {
+      slug
+      name
+      name_en
+      logo
+    }
+  }
+`;
+
+export const KLEVER_VEHICLE_MODELS_QUERY = /* GraphQL */ `
+  query KleverVehicleModels($make: String!) {
+    kleverVehicleModels(make: $make) {
+      slug
+      name
+      name_en
+      make_slug
+      make_name
+      year_ranges
+    }
+  }
+`;
+
+export const KLEVER_VEHICLE_YEARS_QUERY = /* GraphQL */ `
+  query KleverVehicleYears($make: String!, $model: String!) {
+    kleverVehicleYears(make: $make, model: $model) {
+      slug
+      name
+    }
+  }
+`;
+
+export const KLEVER_VEHICLE_MODIFICATIONS_QUERY = /* GraphQL */ `
+  query KleverVehicleModifications($make: String!, $model: String!, $year: Int!) {
+    kleverVehicleModifications(make: $make, model: $model, year: $year) {
+      slug
+      name
+      trim
+      body
+      fuel
+      power_hp
+      power_kw
+      engine_code
+      generation_name
+      generation_start
+      generation_end
+      body_image
+    }
+  }
+`;
+
+export const KLEVER_VEHICLE_FITMENT_QUERY = /* GraphQL */ `
+  query KleverVehicleFitment($make: String!, $model: String!, $year: Int!, $modification: String!) {
+    kleverVehicleFitment(make: $make, model: $model, year: $year, modification: $modification) {
+      slug
+      name
+      trim
+      start_year
+      end_year
+      generation_name
+      tire_type
+      wheels {
+        is_stock
+        is_runflat_tires
+        is_extra_load_tires
+        is_recommended_for_winter
+        front {
+          rim
+          rim_diameter
+          rim_width
+          rim_offset
+          tire_full
+          tire
+          tire_width
+          tire_aspect_ratio
+          load_index
+          speed_index
+          pressure_bar
+          pressure_psi
+          pressure_kpa
+        }
+        rear {
+          rim
+          rim_diameter
+          rim_width
+          rim_offset
+          tire_full
+          tire
+          tire_width
+          tire_aspect_ratio
+          load_index
+          speed_index
+          pressure_bar
+          pressure_psi
+          pressure_kpa
+        }
+      }
+    }
+  }
+`;
+
+export const KLEVER_VEHICLES_BY_TYRE_SIZE_QUERY = /* GraphQL */ `
+  query KleverVehiclesByTyreSize($width: Int!, $height: Int!, $rim: Int!) {
+    kleverVehiclesByTyreSize(width: $width, height: $height, rim: $rim) {
+      slug
+      name
+      name_en
+      make_slug
+      make_name
+      year_ranges
+    }
+  }
+`;
+
+
+// ── Main navigation menu (Klever custom module) ───────────────────
+// Requires the x-klever-api-key header (see magentoHeaders in
+// src/config/app-config.ts) — without it Magento returns "Invalid or
+// missing API key" for this field specifically, distinct from the site's
+// own Basic Auth wall.
+export const KLEVER_MAIN_MENU_QUERY = /* GraphQL */ `
+  query KleverMainMenu {
+    kleverMainMenu {
+      label
+      url
+      children {
+        label
+        url
+      }
+    }
+  }
+`;
+
 // ── DriverReviews (Klever) widget SDK + config ────────────────────
 // Boots the DriverReviews JS SDK; per-product data comes via the
 // `driver_reviews` field on ProductInterface (see graphql/fragments).
@@ -607,6 +923,27 @@ export const KLEVER_DRIVER_REVIEWS_QUERY = /* GraphQL */ `
       show_external_reviews
       show_category_rating
       show_jsonld
+    }
+  }
+`;
+
+export const CUSTOMER_REVIEWS_QUERY = /* GraphQL */ `
+  query CustomerProductReviews {
+    customer {
+      reviews {
+        items {
+          nickname
+          summary
+          text
+          average_rating
+          created_at
+          product {
+            name
+            sku
+            url_key
+          }
+        }
+      }
     }
   }
 `;
@@ -986,17 +1323,32 @@ export const AVAILABLE_STORES_DETAILED_QUERY = /* GraphQL */ `
 `;
 
 // ── URL Route resolver — resolves a path to product / category / CMS page ──
+/* route()'s real return type is RoutableInterface, whose possibleTypes
+   (confirmed via introspection) are CmsPage, CategoryTree, RoutableUrl, and
+   six CONCRETE product types (SimpleProduct, ConfigurableProduct,
+   VirtualProduct, DownloadableProduct, BundleProduct, GroupedProduct) — NOT
+   the abstract ProductInterface/CategoryInterface. Spreading the abstract
+   interfaces is a validation error here ("can never be of type
+   ProductInterface"), which fails the ENTIRE query — every route resolution
+   (products, categories, CMS pages alike) — not just product ones. */
+const ROUTE_PRODUCT_FIELDS = `
+  uid
+  sku
+  url_key
+  name
+`;
+
 export const ROUTE_QUERY = /* GraphQL */ `
   query Route($url: String!) {
     route(url: $url) {
       type
-      ... on ProductInterface {
-        uid
-        sku
-        url_key
-        name
-      }
-      ... on CategoryInterface {
+      ... on SimpleProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on ConfigurableProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on VirtualProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on DownloadableProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on BundleProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on GroupedProduct { ${ROUTE_PRODUCT_FIELDS} }
+      ... on CategoryTree {
         uid
         url_key
         name

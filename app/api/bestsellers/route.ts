@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { BESTSELLERS_QUERY } from "@/lib/queries";
 import { adaptGqlProduct, type GqlProduct } from "@/lib/magento";
 import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
+import { resolveBrandInfo } from "@/lib/services/brands.service";
 
 /* GET /api/bestsellers?pageSize=12&page=1&store=default
  *
@@ -34,8 +35,11 @@ export async function GET(req: NextRequest) {
     }
 
     const result = json?.data?.mpSmtpBestsellers;
-    const items  = (result?.items ?? []).map((entry: { product: GqlProduct; qty_ordered: number }) =>
-      adaptGqlProduct(entry.product),
+    const items  = await resolveBrandInfo(
+      (result?.items ?? []).map((entry: { product: GqlProduct; qty_ordered: number }) =>
+        adaptGqlProduct(entry.product),
+      ),
+      store,
     );
 
     return NextResponse.json(

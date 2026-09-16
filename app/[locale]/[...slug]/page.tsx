@@ -6,6 +6,7 @@ import EvTyresLanding from "@/components/ev/EvTyresLanding";
 import CmsCarousel from "@/components/CmsCarousel";
 import CmsAccordion from "@/components/CmsAccordion";
 import CarBatteryReplacementLanding from "@/components/service/CarBatteryReplacementLanding";
+import TyreGuideSeoContent from "@/components/TyreGuideSeoContent";
 import { resolveRoute } from "@/lib/services/route.service";
 import { getCmsPage } from "@/lib/services/cms.service";
 import { getCategoryMeta } from "@/lib/services/category.service";
@@ -36,11 +37,19 @@ const LISTING_SLUGS = new Set([
   "ev-tyres",
   "ev-tires",
   "run-flat-tires",
-  "on-road-tires",
-  "off-road-tires-4x4",
 ]);
 
 const EV_SLUGS = new Set(["electric-vehicle-tyres-uae", "ev-tyres", "ev-tires"]);
+
+/* "on-road-tires" and "off-road-tires-4x4" used to render here as filtered
+   listing views, but Magento has no real attribute distinguishing on-road
+   from off-road/4x4 tyres — the filter was never actually wired, so both
+   pages silently showed the entire unfiltered Tyres catalog under a
+   misleading title. Both slugs now redirect to the real root Tyres category
+   in middleware.ts (a real HTTP 307, done there rather than here since a
+   redirect() thrown after this page's root layout starts streaming would
+   only degrade to a client-side meta-refresh) — neither slug reaches this
+   file anymore. */
 
 /* ── SEO: resolved per entity, straight from Magento ──────────────── */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -50,7 +59,39 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const canonical = `/${locale}/${slug}`;
   const languages = { en: `/en/${slug}`, ar: `/ar/${slug}` };
 
+  if (EV_SLUGS.has(slug)) {
+    const page = await getCmsPage(slug, store);
+    const title = page?.meta_title || page?.title || (locale === "ar" ? "إطارات السيارات الكهربائية في الإمارات" : "Electric Vehicle Tyres in UAE | Best EV Tyres for Tesla, BMW & More");
+    const description = page?.meta_description || (locale === "ar" ? "تسوق أفضل إطارات السيارات الكهربائية في الإمارات" : "Buy electric vehicle tyres in UAE. Best EV tyres for Tesla Model 3, Model Y, BMW iX, Hyundai IONIQ 5 & more. EV-specific, low noise & high efficiency tyres.");
+    return {
+      title,
+      description,
+      alternates: { canonical, languages },
+      openGraph: { title, description, type: "website" },
+    };
+  }
+
   if (LISTING_SLUGS.has(slug)) {
+    /* "tyres" is the real root Tyres category (uid MTg=) with its own real
+       meta_title/meta_description — fetch those instead of the generic
+       fallback copy below, same as every other real category on the site.
+       "run-flat-tires" is a synthetic filtered view of that SAME root
+       category (see isRunFlatCategory in app/api/category-page/route.ts —
+       it resolves to the identical tyresCategoryUid, with a real `runflat`
+       product-attribute filter applied), so there's no distinct real meta
+       for it to prefer instead. */
+    if (slug === "tyres") {
+      const meta = await getCategoryMeta("tyres", store);
+      if (meta?.metaTitle) {
+        const title = meta.metaTitle;
+        return {
+          title,
+          description: meta.metaDescription || undefined,
+          alternates: { canonical, languages },
+          openGraph: { title, type: "website" },
+        };
+      }
+    }
     const hero = CATEGORY_HERO[slug] ?? {};
     const title = hero.heroTitle ?? "Buy Car Tyres Online in UAE";
     return {
@@ -97,7 +138,25 @@ export default async function DynamicSlugPage({ params }: PageProps) {
   const slug = toSlug(params.slug);
   const store = storeCode(locale);
 
-  // Special listing categories (e.g. EV tyres, run-flat, on-road, off-road)
+  // EV Tyres Landing Page (electric-vehicle-tyres-uae, ev-tyres, ev-tires) — matches live Magento landing page
+  if (EV_SLUGS.has(slug)) {
+    const breadcrumbJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/${locale}` },
+        { "@type": "ListItem", position: 2, name: locale === "ar" ? "إطارات السيارات الكهربائية" : "EV Tyres", item: `${SITE_URL}/${locale}/${slug}` },
+      ],
+    };
+    return (
+      <>
+        <JsonLd data={breadcrumbJsonLd} />
+        <EvTyresLanding />
+      </>
+    );
+  }
+
+  // Special listing categories (e.g. tyres, run-flat-tires)
   if (LISTING_SLUGS.has(slug)) {
     const hero = CATEGORY_HERO[slug] ?? {};
     const breadcrumbTitle = hero.heroTitle ?? slug;
@@ -126,12 +185,6 @@ export default async function DynamicSlugPage({ params }: PageProps) {
             showTyreFinder={hero.showTyreFinder}
           />
         </Suspense>
-        {/* Magento's real EV Tyres CMS page (electric-vehicle-tyres-uae)
-            renders a broken custom template — see EvTyresLanding.tsx — so
-            this supplementary section is original copy, not Magento
-            content. Shown after the real, live-data product grid above,
-            only for the EV slugs. */}
-        {EV_SLUGS.has(slug) && <EvTyresLanding />}
       </>
     );
   }
@@ -317,6 +370,10 @@ export default async function DynamicSlugPage({ params }: PageProps) {
               </div>
             ) : (
               <div className="cms-content" dangerouslySetInnerHTML={{ __html: decodedContent }} />
+            )}
+            {/* Tyre Guide SEO Content for services and automotive pages */}
+            {(slug.includes("service") || slug.includes("tyre") || slug.includes("tire")) && (
+              <TyreGuideSeoContent locale={locale} />
             )}
             <div className="container py-10 lg:py-14">
               <CmsCarousel />

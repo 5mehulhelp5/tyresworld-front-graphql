@@ -18,7 +18,11 @@ export interface NavItem {
   children?: NavItem[];
 }
 
+/**
+ * Static Fallback commented out — Menus are managed 100% dynamically via Magento API (kleverMainMenu).
+ */
 export const MAIN_NAV: NavItem[] = [
+  /*
   {
     id: "tyres",
     label: "Tyres",
@@ -87,6 +91,7 @@ export const MAIN_NAV: NavItem[] = [
     label: "Contact Us",
     slug: "contact",
   },
+  */
 ];
 
 /** Locale-prefixed href for a nav item. */

@@ -13,6 +13,7 @@ import LocaleDirectionSetter from "@/components/LocaleDirectionSetter";
 import { StoreConfigProvider } from "@/lib/store-config-context";
 import { DriverReviewsProvider } from "@/lib/driver-reviews-context";
 import { getStoreConfig } from "@/lib/services/store.service";
+import { getMainMenu } from "@/lib/services/menu.service";
 import { APP_CONFIG } from "@/src/config/app-config";
 import JsonLd from "@/components/JsonLd";
 
@@ -55,6 +56,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const storeConfig = await getStoreConfig();
+  // Real live menu from Magento (kleverMainMenu) API
+  const mainMenu = (await getMainMenu()) ?? [];
 
   const organizationJsonLd = {
     "@context": "https://schema.org",
@@ -102,10 +105,10 @@ export default async function RootLayout({
                   <DriverReviewsProvider>
                     <CartAuthSync />
                     <Suspense fallback={null}>
-                      <Header />
+                      <Header menu={mainMenu} />
                     </Suspense>
                     <main>{children}</main>
-                    <Footer />
+                    <Footer menu={mainMenu} />
                     <FloatingContact />
                   </DriverReviewsProvider>
                 </WishlistProvider>

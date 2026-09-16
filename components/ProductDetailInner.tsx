@@ -11,8 +11,8 @@ import { isMotorcycleProduct } from "@/lib/magento";
 import type { Product } from "@/lib/data";
 import type { ApiProductsResponse } from "@/lib/magento";
 import { useOfferLabels } from "@/lib/useOfferLabels";
-import { getBrandLogo } from "@/lib/brandLogos";
 import { useCart } from "@/lib/cart-context";
+import ProductImage from "@/components/ProductImage";
 import TyreListingCard from "@/components/TyreListingCard";
 import TyreListingCardSkeleton from "@/components/TyreListingCardSkeleton";
 import TyreFinder from "@/components/TyreFinder";
@@ -104,8 +104,8 @@ function parseTyreProductName(name: string): TyreSpecs {
 /* ══════════════════════════════════════════════════════════════════
    BRAND LOGO
  ══════════════════════════════════════════════════════════════════ */
-function BrandLogoDisplay({ brandId, brandName }: { brandId?: string; brandName?: string }) {
-  const logo = getBrandLogo(brandId) || getBrandLogo(brandName);
+function BrandLogoDisplay({ brandLogoUrl, brandName }: { brandLogoUrl?: string | null; brandName?: string }) {
+  const logo = brandLogoUrl;
   if (logo) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -288,7 +288,15 @@ function PricingCard({
      stock_status (confirmed IN_STOCK for at least one), so this is a fixed
      category rule, not a stock check, for bikes — same as the listing cards. */
   const isOutOfStock = isMotorcycleProduct(product) || product.inStock === false;
-  const setOf4Price = hasPrice ? product.price * setSize : 0;
+
+  /* Real per-set price from Magento's own pricing/promo rules
+     (kleverSetPricing) when available for this SKU's set size — set4/set2
+     already have any matching bulk-buy discount applied server-side
+     (resolveSetPricing in lib/magento.ts), computed from the API's own real
+     promo_discount_amount/promo_discount_step fields, not guessed here.
+     Falls back to a plain product.price × setSize multiplication otherwise. */
+  const realSetPrice = setSize === 2 ? product.setPricing?.set2 : product.setPricing?.set4;
+  const setOf4Price = hasPrice ? realSetPrice ?? product.price * setSize : 0;
 
   async function handleAddToCart() {
     if (adding) return;
@@ -564,15 +572,15 @@ function RatingsSection({
    OVERVIEW TAB — product description
 ══════════════════════════════════════════════════════════════════ */
 function OverviewTabContent({ product }: { product: ProductDetail }) {
-  const hasDescription = !!(product.shortDescriptionHtml || product.descriptionHtml);
-
-  if (!hasDescription) {
-    return (
-      <p className="text-sm text-gray-400 italic">
-        No description available for this product yet.
-      </p>
-    );
-  }
+  /* Magento's short_description and description are the identical string
+     for every product checked here (both just the product name) — there's
+     no real "short vs. long" distinction in this catalog's data. Rendering
+     both blocks (as this used to) duplicated that one real line of text.
+     Live's actual Details tab shows the description text once, followed by
+     the SKU on its own line — match that exactly. Prefer descriptionHtml,
+     falling back to shortDescriptionHtml only when description is empty
+     but short_description isn't (never render both). */
+  const html = product.descriptionHtml || product.shortDescriptionHtml;
 
   const htmlClasses =
     "text-[14px] leading-relaxed text-gray-700 [&_p]:mb-3 [&_p:last-child]:mb-0 " +
@@ -580,19 +588,15 @@ function OverviewTabContent({ product }: { product: ProductDetail }) {
     "[&_li]:mb-1 [&_strong]:font-bold [&_strong]:text-gray-900 [&_a]:text-[#ed1c24] [&_a]:underline";
 
   return (
-    <div className="space-y-5">
-      {product.shortDescriptionHtml && (
-        <div
-          className={htmlClasses}
-          dangerouslySetInnerHTML={{ __html: product.shortDescriptionHtml }}
-        />
+    <div className="space-y-1.5">
+      {html ? (
+        <div className={htmlClasses} dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <p className="text-sm text-gray-400 italic">
+          No description available for this product yet.
+        </p>
       )}
-      {product.descriptionHtml && (
-        <div
-          className={htmlClasses}
-          dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
-        />
-      )}
+      {product.sku && <p className="text-[13px] text-gray-500">{product.sku}</p>}
     </div>
   );
 }
@@ -909,12 +913,13 @@ export default function ProductDetailInner({
                   </div>
                 )}
 
-                <div className="flex items-center justify-center p-6 bg-white overflow-hidden" style={{ minHeight: 340 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                <div className="relative flex items-center justify-center p-6 bg-white overflow-hidden" style={{ minHeight: 340 }}>
+                  <ProductImage
                     src={currentImg}
                     alt={product.name}
-                    className="max-h-[340px] w-full object-contain group-hover:scale-105 transition-transform duration-300 ease-out"
+                    fill
+                    className="object-contain group-hover:scale-105 transition-transform duration-300 ease-out"
+                    sizes="(max-width: 1024px) 90vw, 400px"
                   />
                 </div>
 
@@ -940,7 +945,7 @@ export default function ProductDetailInner({
             {/* ── MIDDLE: Info & Specs ────────────────────────────── */}
             <div className="w-full">
               {/* Brand logo */}
-              <BrandLogoDisplay brandId={product.brand} brandName={product.brandName} />
+              <BrandLogoDisplay brandLogoUrl={product.brandLogoUrl} brandName={product.brandName} />
 
               {/* Title */}
               {displayTitle && (
@@ -1364,53 +1369,22 @@ function WriteReviewCard({ product }: { product: ProductDetail }) {
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // Default Quality / Value / Price scales matching Magento review form
-  const defaultScales: RatingScale[] = [
-    {
-      id: "Quality",
-      name: "Quality",
-      values: [
-        { value_id: "1", value: "1" },
-        { value_id: "2", value: "2" },
-        { value_id: "3", value: "3" },
-        { value_id: "4", value: "4" },
-        { value_id: "5", value: "5" },
-      ],
-    },
-    {
-      id: "Value",
-      name: "Value",
-      values: [
-        { value_id: "1", value: "1" },
-        { value_id: "2", value: "2" },
-        { value_id: "3", value: "3" },
-        { value_id: "4", value: "4" },
-        { value_id: "5", value: "5" },
-      ],
-    },
-    {
-      id: "Price",
-      name: "Price",
-      values: [
-        { value_id: "1", value: "1" },
-        { value_id: "2", value: "2" },
-        { value_id: "3", value: "3" },
-        { value_id: "4", value: "4" },
-        { value_id: "5", value: "5" },
-      ],
-    },
-  ];
-
+  /* Real Magento review-rating scales use opaque base64 attribute-option
+     IDs (e.g. id: "MQ==", value_id: "Ng==") — nothing like plain "Quality"/
+     "1".."5" strings. A hardcoded guess here previously stood in for these
+     whenever /api/reviews returned nothing, so a submitted rating could
+     carry an ID Magento doesn't recognize. If the real API has no scales,
+     the rating box below simply doesn't render — the rest of the review
+     form (nickname/summary/text) still submits fine without star ratings. */
   useEffect(() => {
     setLoadingMetadata(true);
     fetch("/api/reviews")
       .then((r) => r.json())
       .then((data) => {
-        const activeScales = data.ratings?.length ? data.ratings : defaultScales;
-        setScales(activeScales);
+        setScales(data.ratings?.length ? data.ratings : []);
       })
       .catch(() => {
-        setScales(defaultScales);
+        setScales([]);
       })
       .finally(() => setLoadingMetadata(false));
 
@@ -1468,8 +1442,6 @@ function WriteReviewCard({ product }: { product: ProductDetail }) {
     }
   }
 
-  const activeScales = scales.length > 0 ? scales : defaultScales;
-
   return (
     <div id="write-review" className="bg-white border border-gray-200/80 rounded-sm p-6 sm:p-8 scroll-mt-24">
       {/* ── Title & Subtitle ── */}
@@ -1487,10 +1459,13 @@ function WriteReviewCard({ product }: { product: ProductDetail }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* ── 3-Column Rating Box (Quality | Value | Price) ── */}
+          {/* ── 3-Column Rating Box (Quality | Value | Price) ──
+              Only rendered when Magento actually returned real rating
+              scales — no invented scale/IDs when it hasn't. */}
+          {scales.length > 0 && (
           <div className="border border-gray-200/80 bg-[#fbfbfb] rounded-sm p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200/90">
-              {activeScales.map((s, idx) => {
+              {scales.map((s, idx) => {
                 const currentValId = ratings[s.id];
                 const activeValueNum = currentValId
                   ? s.values.find((v) => v.value_id === currentValId)?.value
@@ -1544,6 +1519,7 @@ function WriteReviewCard({ product }: { product: ProductDetail }) {
               })}
             </div>
           </div>
+          )}
 
           {/* ── Nickname ── */}
           <div>

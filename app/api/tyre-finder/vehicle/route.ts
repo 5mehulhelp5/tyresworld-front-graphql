@@ -1,44 +1,27 @@
 /**
  * /api/tyre-finder/vehicle — vehicle cascade for the Tyre Finder's
- * "Search By Vehicle" tab, backed by Magento's Klever_PartsFinder module.
+ * "Search By Vehicle" tab, backed by Magento's Klever_NextJs GraphQL module.
  *
- * WHY NOT THE OTHER TWO SOURCES
- *   Magento GraphQL: `vehicle` is filterable but no product carries it
- *   (products(filter:{vehicle:{eq:"3579"}}) → total_count 0 for all 18
- *   options), `model` is not filterable at all, and `year` is the tyre's
- *   production year, not the vehicle's. So a vehicle selection can never
- *   filter the catalog directly.
- *
- *   The Wheel API (lib/wheel-service.ts): has makes/models/years/trims but
- *   its schema exposes no forward tyre-size lookup — only the reverse
- *   search(width,height,rim) — so it cannot turn a trim into a size.
- *
- *   Klever_PartsFinder resolves a trim to the fitment sizes, and those sizes
- *   filter on width/height/rim, which products DO carry. That is the whole
- *   point of routing through here.
- *
- * STEPS
+ * Steps:
  *   ?step=makes
  *   ?step=models&make=bmw
  *   ?step=years&make=bmw&model=3-series
  *   ?step=trims&make=bmw&model=3-series&year=2022
  *   ?step=sizes&make=bmw&model=3-series&year=2022&modification=cafc866f97
  *
- * Responses: { options: [...] } for the first four, { sizes: [...] } for the
- * last. Nothing is synthesised — an upstream failure returns an empty list
- * plus `error`.
+ * Responses: { options: [...] } for the first four, { sizes: [...] } for the last.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
+import { magentoFetch } from "@/lib/graphql/client";
+import {
+  KLEVER_VEHICLE_MAKES_QUERY,
+  KLEVER_VEHICLE_MODELS_QUERY,
+  KLEVER_VEHICLE_YEARS_QUERY,
+  KLEVER_VEHICLE_MODIFICATIONS_QUERY,
+  KLEVER_VEHICLE_FITMENT_QUERY,
+} from "@/lib/queries";
 
-const ORIGIN = APP_CONFIG.magento.graphqlUrl.replace(/\/graphql\/?$/, "");
-
-/** Make logos are served off the Wheel API host, keyed by make slug — the
-    same path the live theme's finder uses; the controller sends logo_url empty. */
 const LOGO_BASE = "https://wheel-api.klever.ae/logos";
-
-/** The fitment database is effectively static; sizes change no faster. */
-const TTL = 86_400;
 
 type Option = {
   label: string;
@@ -60,91 +43,15 @@ type TyreSize = {
   rearLabel: string | null;
 };
 
-/** POST a partsfinder controller. Not GraphQL — these are theme AJAX endpoints. */
-async function pf<T>(
-  path: string,
-  body: Record<string, string>,
-  store: string,
-): Promise<{ json?: T; error?: string }> {
-  const storePath = store === "ar" ? "ar" : "en";
-  try {
-    const res = await fetch(`${ORIGIN}/${storePath}/partsfinder/${path}`, {
-      method: "POST",
-      headers: {
-        ...(magentoHeaders(store) as Record<string, string>),
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-Requested-With": "XMLHttpRequest",
-        Accept: "application/json",
-      },
-      body: new URLSearchParams(body).toString(),
-      next: { revalidate: TTL },
-    });
-    if (!res.ok) return { error: `Partsfinder HTTP ${res.status}` };
-    const json = (await res.json().catch(() => null)) as T | null;
-    return json ? { json } : { error: "Partsfinder returned invalid JSON" };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "Network error" };
-  }
-}
-
-/* ── Size row parsing ──────────────────────────────────────────────
-   getsearchbymodel is the only endpoint that maps a trim to fitment
-   sizes and it answers in rendered theme HTML. The authoritative values
-   are the onclick arguments the theme attaches to each row:
-     showproduct('225','50','17')                  front only
-     showproduct('225','45','18','255','40','18')  staggered front/rear
-   The rest is the metadata shown beside the size: an `oem` class marks the
-   factory fitment, speed-index-label-1/-2 carry front/rear load-speed
-   indices. */
-const SHOWPRODUCT_RE = /showproduct\(\s*((?:'[^']*'\s*,?\s*)+)\)/i;
-const ARG_RE = /'([^']*)'/g;
-const SPEED_1_RE = /speed-index-label-1"[^>]*>([^<]+)</i;
-const SPEED_2_RE = /speed-index-label-2"[^>]*>([^<]+)</i;
-
-function parseSizeRow(html: string): TyreSize | null {
-  const call = SHOWPRODUCT_RE.exec(html);
-  if (!call) return null;
-
-  const args = [...call[1].matchAll(ARG_RE)].map((m) => m[1].trim());
-  const [width, height, rim, rearWidth, rearHeight, rearRim] = args;
-
-  // Without a complete front size the row cannot filter products.
-  if (!width || !height || !rim) return null;
-
-  const hasRear = Boolean(rearWidth && rearHeight && rearRim);
-
-  return {
-    width,
-    height,
-    rim,
-    rear: hasRear ? { width: rearWidth, height: rearHeight, rim: rearRim } : null,
-    isFactory: /<li[^>]*class="[^"]*\boem\b/i.test(html),
-    speedIndex: SPEED_1_RE.exec(html)?.[1]?.trim() || null,
-    rearSpeedIndex: hasRear ? SPEED_2_RE.exec(html)?.[1]?.trim() || null : null,
-    label: `${width}/${height}R${rim}`,
-    rearLabel: hasRear ? `${rearWidth}/${rearHeight}R${rearRim}` : null,
-  };
-}
-
-/** Make names arrive HTML-escaped in the markup (e.g. "Mercedes &amp; Co"). */
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&#0?39;|&apos;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
-
-/* ── Handler ───────────────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const step = searchParams.get("step") ?? "makes";
   const store = searchParams.get("store") === "ar" ? "ar" : "en";
-  const make = searchParams.get("make") ?? "";
-  const model = searchParams.get("model") ?? "";
-  const year = searchParams.get("year") ?? "";
-  const modification = searchParams.get("modification") ?? "";
+  const make = searchParams.get("make")?.trim() ?? "";
+  const model = searchParams.get("model")?.trim() ?? "";
+  const yearStr = searchParams.get("year")?.trim() ?? "";
+  const year = parseInt(yearStr, 10);
+  const modification = searchParams.get("modification")?.trim() ?? "";
 
   const fail = (error: string, status = 200) =>
     NextResponse.json(step === "sizes" ? { sizes: [], error } : { options: [], error }, { status });
@@ -154,139 +61,187 @@ export async function GET(req: NextRequest) {
       headers: { "Cache-Control": "s-maxage=86400, stale-while-revalidate=3600" },
     });
 
+  // 1. MAKES
   if (step === "makes") {
-    /* getvehiclelist, not vehicle/getMakes.
-       getMakes returns the whole upstream database — 171 makes, of which 80 are
-       not in the storefront's own list and have no logo file (…/logos/<slug>.png
-       404s for all of them). getvehiclelist is the curated list the live finder
-       renders: 118 makes, each with the logo URL already resolved, and it
-       includes 27 makes getMakes omits entirely (abarth, jetour, jaecoo,
-       hongqi, ineos …) that the model cascade serves fine.
-       It answers in rendered HTML, so the make and its logo are read from the
-       markup: onclick="getmodel('<slug>' , '<name>')" plus the row's <img>. */
-    const { json, error } = await pf<{ response?: string }>(
-      "ajax/getvehiclelist",
-      {},
-      store,
-    );
-    if (error) return fail(error);
+    const res = await magentoFetch<{
+      kleverVehicleMakes?: { slug: string; name: string; name_en?: string; logo?: string }[];
+    }>(KLEVER_VEHICLE_MAKES_QUERY, {}, { store, revalidate: 86400 });
 
-    const html = json?.response;
-    if (!html) return fail("Makes unavailable");
-
-    const options: Option[] = [];
-    const seen = new Set<string>();
-    for (const row of html.split("<li").slice(1)) {
-      const m = /getmodel\('([^']+)'\s*,\s*'([^']*)'\)/.exec(row);
-      if (!m) continue;
-      const slug = m[1].trim();
-      const label = decodeEntities(m[2]).trim();
-      if (!slug || !label || seen.has(slug)) continue;
-      seen.add(slug);
-      const logo = /<img[^>]+src="([^"]+)"/.exec(row)?.[1]?.trim();
-      options.push({ label, value: slug, logo: logo || `${LOGO_BASE}/${slug}.png` });
+    if (!res.ok || !res.data?.kleverVehicleMakes?.length) {
+      return fail(res.errors?.[0]?.message || "Makes unavailable");
     }
 
-    if (!options.length) return fail("Makes unavailable");
-    return ok({ options });
-  }
-
-  if (step === "models") {
-    if (!make) return fail("make is required", 400);
-    type Up = { status?: string; models?: { slug?: string; name?: string; name_en?: string }[] };
-    const { json, error } = await pf<Up>("vehicle/getModels", { make }, store);
-    if (error) return fail(error);
-    if (json?.status !== "success") return fail("Models unavailable");
-
-    const options = (json.models ?? [])
-      .map((m): Option | null => {
-        const slug = m.slug?.trim();
-        const label = (m.name || m.name_en)?.trim();
-        return slug && label ? { label, value: slug } : null;
-      })
-      .filter((o): o is Option => o !== null);
-
-    return ok({ options });
-  }
-
-  if (step === "years") {
-    if (!make || !model) return fail("make and model are required", 400);
-    type Up = { status?: string; years?: number[] };
-    const { json, error } = await pf<Up>("vehicle/getYears", { make, model }, store);
-    if (error) return fail(error);
-    if (json?.status !== "success") return fail("Years unavailable");
-
-    const options = (json.years ?? [])
-      .filter((y) => Number.isFinite(Number(y)))
-      .map((y) => ({ label: String(y), value: String(y) }));
-
-    return ok({ options });
-  }
-
-  if (step === "trims") {
-    if (!make || !model || !year) return fail("make, model and year are required", 400);
-    type Up = {
-      status?: string;
-      modifications?: {
-        slug?: string;
-        name?: string;
-        trim?: string;
-        engine?: { fuel?: string; power?: { hp?: number } | null } | null;
-      }[];
-    };
-    const { json, error } = await pf<Up>(
-      "vehicle/getModifications",
-      { make, model, year },
-      store,
-    );
-    if (error) return fail(error);
-    if (json?.status !== "success") return fail("Trims unavailable");
-
-    const options = (json.modifications ?? [])
-      .map((m): Option | null => {
-        const slug = m.slug?.trim();
-        const label = (m.name || m.trim)?.trim();
-        if (!slug || !label) return null;
+    const options: Option[] = res.data.kleverVehicleMakes
+      .filter((m) => m.slug && (m.name || m.name_en))
+      .map((m) => {
+        const label = (store === "ar" && m.name ? m.name : m.name || m.name_en || m.slug).trim();
         return {
           label,
-          value: slug,
-          fuel: m.engine?.fuel?.trim() || null,
-          hp: m.engine?.power?.hp ?? null,
+          value: m.slug.trim(),
+          logo: m.logo || `${LOGO_BASE}/${m.slug.trim()}.png`,
         };
-      })
-      .filter((o): o is Option => o !== null);
+      });
 
     return ok({ options });
   }
 
+  // 2. MODELS
+  if (step === "models") {
+    if (!make) return fail("make is required", 400);
+
+    const res = await magentoFetch<{
+      kleverVehicleModels?: { slug: string; name: string; name_en?: string }[];
+    }>(KLEVER_VEHICLE_MODELS_QUERY, { make }, { store, revalidate: 86400 });
+
+    if (!res.ok || !res.data?.kleverVehicleModels?.length) {
+      return fail(res.errors?.[0]?.message || "Models unavailable");
+    }
+
+    const options: Option[] = res.data.kleverVehicleModels
+      .filter((m) => m.slug && (m.name || m.name_en))
+      .map((m) => ({
+        label: (store === "ar" && m.name ? m.name : m.name || m.name_en || m.slug).trim(),
+        value: m.slug.trim(),
+      }));
+
+    return ok({ options });
+  }
+
+  // 3. YEARS
+  if (step === "years") {
+    if (!make || !model) return fail("make and model are required", 400);
+
+    const res = await magentoFetch<{
+      kleverVehicleYears?: { slug: string; name: string }[];
+    }>(KLEVER_VEHICLE_YEARS_QUERY, { make, model }, { store, revalidate: 86400 });
+
+    if (!res.ok || !res.data?.kleverVehicleYears?.length) {
+      return fail(res.errors?.[0]?.message || "Years unavailable");
+    }
+
+    const options: Option[] = res.data.kleverVehicleYears
+      .filter((y) => y.slug && y.name)
+      .map((y) => ({
+        label: y.name.trim(),
+        value: y.slug.trim(),
+      }));
+
+    return ok({ options });
+  }
+
+  // 4. TRIMS / MODIFICATIONS
+  if (step === "trims") {
+    if (!make || !model || !year || isNaN(year)) {
+      return fail("make, model and valid year are required", 400);
+    }
+
+    const res = await magentoFetch<{
+      kleverVehicleModifications?: {
+        slug: string;
+        name: string;
+        trim?: string;
+        fuel?: string;
+        power_hp?: number;
+      }[];
+    }>(KLEVER_VEHICLE_MODIFICATIONS_QUERY, { make, model, year }, { store, revalidate: 86400 });
+
+    if (!res.ok || !res.data?.kleverVehicleModifications?.length) {
+      return fail(res.errors?.[0]?.message || "Trims unavailable");
+    }
+
+    const options: Option[] = res.data.kleverVehicleModifications
+      .filter((m) => m.slug && (m.name || m.trim))
+      .map((m) => ({
+        label: (m.name || m.trim || m.slug).trim(),
+        value: m.slug.trim(),
+        fuel: m.fuel?.trim() || null,
+        hp: m.power_hp ?? null,
+      }));
+
+    return ok({ options });
+  }
+
+  // 5. SIZES / FITMENT
   if (step === "sizes") {
-    if (!make || !model || !year || !modification) {
+    if (!make || !model || !year || isNaN(year) || !modification) {
       return fail("make, model, year and modification are required", 400);
     }
-    type Up = { enginesTyre?: string[]; wheelsTyre?: string[] };
-    const { json, error } = await pf<Up>(
-      "ajax/getsearchbymodel",
+
+    const res = await magentoFetch<{
+      kleverVehicleFitment?: {
+        wheels?: {
+          is_stock?: boolean;
+          front?: {
+            tire?: string;
+            tire_width?: number;
+            tire_aspect_ratio?: number;
+            rim_diameter?: number;
+            speed_index?: string;
+          };
+          rear?: {
+            tire?: string;
+            tire_width?: number;
+            tire_aspect_ratio?: number;
+            rim_diameter?: number;
+            speed_index?: string;
+          };
+        }[];
+      }[];
+    }>(
+      KLEVER_VEHICLE_FITMENT_QUERY,
       { make, model, year, modification },
-      store,
+      { store, revalidate: 86400 }
     );
-    if (error) return fail(error);
 
-    /* The theme renders enginesTyre and wheelsTyre into one list, so both hold
-       size rows; reading only the first would drop valid fitments. */
-    const rows = [...(json?.enginesTyre ?? []), ...(json?.wheelsTyre ?? [])];
-
-    const seen = new Set<string>();
-    const sizes: TyreSize[] = [];
-    for (const row of rows) {
-      const size = parseSizeRow(row);
-      if (!size) continue;
-      const key = `${size.label}|${size.rearLabel ?? ""}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      sizes.push(size);
+    if (!res.ok || !res.data?.kleverVehicleFitment?.length) {
+      return fail(res.errors?.[0]?.message || "Fitment sizes unavailable");
     }
 
-    // Factory fitment first, then by rim diameter.
+    const allWheels = res.data.kleverVehicleFitment.flatMap((f) => f.wheels ?? []);
+    const seen = new Set<string>();
+    const sizes: TyreSize[] = [];
+
+    for (const w of allWheels) {
+      if (!w.front?.tire_width || !w.front?.tire_aspect_ratio || !w.front?.rim_diameter) {
+        continue;
+      }
+
+      const width = String(w.front.tire_width);
+      const height = String(w.front.tire_aspect_ratio);
+      const rim = String(w.front.rim_diameter);
+      const hasRear = Boolean(
+        w.rear?.tire_width && w.rear?.tire_aspect_ratio && w.rear?.rim_diameter
+      );
+
+      const rear = hasRear && w.rear
+        ? {
+            width: String(w.rear.tire_width),
+            height: String(w.rear.tire_aspect_ratio),
+            rim: String(w.rear.rim_diameter),
+          }
+        : null;
+
+      const label = `${width}/${height}R${rim}`;
+      const rearLabel = rear ? `${rear.width}/${rear.height}R${rear.rim}` : null;
+      const key = `${label}|${rearLabel ?? ""}`;
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      sizes.push({
+        width,
+        height,
+        rim,
+        rear,
+        isFactory: Boolean(w.is_stock),
+        speedIndex: w.front.speed_index?.trim() || null,
+        rearSpeedIndex: w.rear?.speed_index?.trim() || null,
+        label,
+        rearLabel,
+      });
+    }
+
+    // Factory fitment first, then by rim diameter
     sizes.sort((a, b) => {
       if (a.isFactory !== b.isFactory) return a.isFactory ? -1 : 1;
       return (parseFloat(a.rim) || 0) - (parseFloat(b.rim) || 0);

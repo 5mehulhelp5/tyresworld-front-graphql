@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useId } from "react";
 import Link from "next/link";
-import { ArrowRight, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { ArrowRight, RefreshCw, Wifi } from "lucide-react";
 import ProductCard from "./ProductCard";
 import ProductCardSkeleton from "./ProductCardSkeleton";
-// import { allProducts } from "@/lib/data";
 import type { Product } from "@/lib/data";
 import type { ApiProductsResponse } from "@/lib/magento";
 import { APP_CONFIG } from "@/src/config/app-config";
@@ -23,7 +22,7 @@ const PAGE_SIZE = 12;
    Each tab is its own Magento category, so we fetch on demand and
    cache the result instead of filtering a single pool client-side.
 ───────────────────────────────────────────────────────────────── */
-type TabData = { products: Product[]; total: number; source: "api" | "fallback" };
+type TabData = { products: Product[]; total: number; source: "api" };
 type Status = "idle" | "loading" | "error";
 
 /* ─────────────────────────────────────────────────────────────────
@@ -58,33 +57,26 @@ export default function FeaturedProducts() {
         return;
       }
 
-      /* Other error — fall back to static data for this tab */
+      /* Other error — leave this tab's cache untouched so the empty-state UI
+         below renders honestly instead of a fabricated substitute. */
       if (!res.ok || json.error) {
-        console.warn("[FeaturedProducts] API error, using static fallback:", json.error);
-        setCache((c) => ({
-          ...c,
-          // [tab.id]: { products: allProducts, total: allProducts.length, source: "fallback" },
-        }));
+        console.warn("[FeaturedProducts] API error:", json.error);
         setStatus("idle");
         return;
       }
 
-      /* Success */
+      /* Success — real API data, whether or not it returned any products. */
       setCache((c) => ({
         ...c,
         [tab.id]: {
           products: json.products,
           total: json.total ?? json.products.length,
-          source: json.products.length > 0 ? "api" : "fallback",
+          source: "api",
         },
       }));
       setStatus("idle");
     } catch {
-      console.warn("[FeaturedProducts] Network error, using static fallback.");
-      setCache((c) => ({
-        ...c,
-        // [tab.id]: { products: allProducts, total: allProducts.length, source: "fallback" },
-      }));
+      console.warn("[FeaturedProducts] Network error.");
       setStatus("idle");
     }
   }
@@ -101,15 +93,9 @@ export default function FeaturedProducts() {
   /* ── Source pill ───────────────────────────────────────────────── */
   const sourcePill =
     status !== "loading" && current ? (
-      current.source === "api" ? (
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
-          <Wifi size={10} /> Live from GraphQL
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink/40 bg-ink/5 px-2.5 py-1 rounded-full">
-          <WifiOff size={10} /> Static data
-        </span>
-      )
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+        <Wifi size={10} /> Live from GraphQL
+      </span>
     ) : null;
 
   /* ─────────────────────────────────────────────────────────────

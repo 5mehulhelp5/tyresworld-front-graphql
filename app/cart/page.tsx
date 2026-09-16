@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
+import ProductImage from "@/components/ProductImage";
 
 /* ── Custom Quantity Dropdown Component ───────────────────────── */
 function CartQtyDropdown({
@@ -124,17 +125,15 @@ export default function CartPage() {
   const shippingAmount =
     cart?.shipping_addresses?.[0]?.selected_shipping_method?.amount?.value ?? 0;
 
-  // Real store data calculations
-  const grandTotalValue = grandTotal > 0 ? grandTotal : subtotal;
-  const subtotalExclTax =
-    cart?.prices?.subtotal_excluding_tax?.value ??
-    (grandTotalValue > 0 ? grandTotalValue / 1.05 : subtotal);
-  const vatAmount =
-    taxFromApi > 0
-      ? taxFromApi
-      : grandTotalValue > subtotalExclTax
-      ? grandTotalValue - subtotalExclTax
-      : subtotal * 0.05;
+  /* Real Magento cart quote data only — verified live that a real cart
+     always returns exact subtotal_excluding_tax/applied_taxes (e.g. a real
+     "UAE VAT" line with its exact amount), so there is no case where a
+     5%-VAT guess is actually needed. If the API ever legitimately has none
+     of these (e.g. an empty/unpriced cart), the honest value is 0, not an
+     invented estimate. */
+  const grandTotalValue = grandTotal;
+  const subtotalExclTax = cart?.prices?.subtotal_excluding_tax?.value ?? subtotal;
+  const vatAmount = taxFromApi;
   const additionalCharge = shippingAmount;
 
   const fmt = (v: number) => <Money value={v} currency={currency} digits={2} />;
@@ -312,8 +311,12 @@ export default function CartPage() {
             <div className="space-y-2">
               {items.map((item) => {
                 const productUrl = `/${locale}/product/${item.product.url_key ?? item.product.sku}`;
-                const unitPrice = item.prices.price.value;
-                const rowTotal = item.prices.row_total.value;
+                const unitPrice =
+                  item.prices.price_including_tax?.value ??
+                  (item.prices.price?.value != null ? Number((item.prices.price.value * 1.05).toFixed(2)) : 0);
+                const rowTotal =
+                  item.prices.row_total_including_tax?.value ??
+                  (item.prices.row_total?.value != null ? Number((item.prices.row_total.value * 1.05).toFixed(2)) : 0);
 
                 return (
                   /* ── Desktop: same 4-col grid as header ── */
@@ -328,14 +331,14 @@ export default function CartPage() {
                       <div className="flex items-center gap-3.5 min-w-0">
                         <Link
                           href={productUrl}
-                          className="w-16 h-16 bg-[#fafafa] border border-gray-100 rounded-xl flex items-center justify-center p-2 shrink-0 hover:border-gray-300 transition-colors"
+                          className="relative w-16 h-16 bg-[#fafafa] border border-gray-100 rounded-xl flex items-center justify-center p-2 shrink-0 hover:border-gray-300 transition-colors"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <ProductImage
                             src={item.product.thumbnail?.url ?? ""}
                             alt={item.product.name}
-                            className="w-full h-full object-contain drop-shadow-sm"
-                            loading="lazy"
+                            fill
+                            className="object-contain drop-shadow-sm"
+                            sizes="64px"
                           />
                         </Link>
                         <div className="min-w-0">
@@ -386,14 +389,14 @@ export default function CartPage() {
                     <div className="flex sm:hidden gap-3 items-center">
                       <Link
                         href={productUrl}
-                        className="w-16 h-16 bg-[#fafafa] border border-gray-100 rounded-xl flex items-center justify-center p-2 shrink-0"
+                        className="relative w-16 h-16 bg-[#fafafa] border border-gray-100 rounded-xl flex items-center justify-center p-2 shrink-0"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <ProductImage
                           src={item.product.thumbnail?.url ?? ""}
                           alt={item.product.name}
-                          className="w-full h-full object-contain"
-                          loading="lazy"
+                          fill
+                          className="object-contain"
+                          sizes="64px"
                         />
                       </Link>
                       <div className="flex-1 min-w-0">
@@ -491,7 +494,7 @@ export default function CartPage() {
 
               {/* Checkout CTA Button */}
               <Link
-                href={`/${locale}/storelocator?ref=cart`}
+                href={`/${locale}/checkout`}
                 className="btn-cta w-full text-sm py-4 rounded-xl shadow-md"
               >
                 <span>{isAr ? "متابعة الدفع" : "PROCEED TO CHECKOUT"}</span>

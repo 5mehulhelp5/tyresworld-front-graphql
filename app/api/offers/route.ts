@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { OFFERS_AGGREGATION_QUERY, OFFERS_PRODUCTS_QUERY } from "@/lib/queries";
 import { parseGraphqlResponse } from "@/lib/magento";
 import { APP_CONFIG, magentoHeaders } from "@/src/config/app-config";
+import { resolveBrandInfo } from "@/lib/services/brands.service";
 export interface OfferOption {
   label: string;
   value: string;
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
       const pd = json?.data?.products;
       return NextResponse.json(
         {
-          products:    parseGraphqlResponse({ data: { products: pd } }),
+          products:    await resolveBrandInfo(parseGraphqlResponse({ data: { products: pd } }), store),
           total:       pd?.total_count ?? 0,
           totalPages:  pd?.page_info?.total_pages ?? 1,
           currentPage: pd?.page_info?.current_page ?? currentPage,

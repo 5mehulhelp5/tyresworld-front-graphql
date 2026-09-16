@@ -7,7 +7,6 @@ import ProductImage from "./ProductImage";
 import { Loader2, Check, ShoppingCart, Truck, MapPin } from "lucide-react";
 import type { Product } from "@/lib/data";
 import { useCart } from "@/lib/cart-context";
-import { getBrandLogo } from "@/lib/brandLogos";
 import { useOfferLabels } from "@/lib/useOfferLabels";
 import { Money } from "@/components/Price";
 import { APP_CONFIG } from "@/src/config/app-config";
@@ -31,7 +30,7 @@ export default function ProductCard({ product }: { product: Product }) {
   const isOutOfStock = product.inStock === false || product.price <= 0;
   const unitPrice = product.price > 0 ? product.price : 0;
   const brandLabel = product.brandName ?? String(product.brand ?? "");
-  const brandLogo = product.brandLogoUrl ?? getBrandLogo(product.brand) ?? getBrandLogo(product.brandName);
+  const brandLogo = product.brandLogoUrl;
   const brandSlug = product.brandName?.toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/(^-|-$)/g, "");
   const brandHref = brandSlug ? `/${locale}/tyres/brand/${brandSlug}` : null;
 

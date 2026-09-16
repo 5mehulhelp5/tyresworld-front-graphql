@@ -20,14 +20,15 @@ import {
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { Money } from "@/components/Price";
-import { MAIN_NAV, navHref, navLabel, isNavActive } from "@/src/config/navigation";
+import { navHref, navLabel, isNavActive, type NavItem } from "@/src/config/navigation";
 import HomeSearchBar from "@/components/home/partora/HomeSearchBar";
+import HeaderSearchModal from "@/components/search/HeaderSearchModal";
 
 /* Icon-button styles live in app/globals.css (.header-icon-*) — the one
    stylesheet is the single source of truth for brand colours. */
 const ICON_BTN = "header-icon-dark";
 
-export default function Header() {
+export default function Header({ menu = [] }: { menu?: NavItem[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -53,6 +54,7 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [cartDropdownOpen, setCartDropdownOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
 
   const totalItemSums = items.reduce((acc, item) => acc + item.prices.row_total.value, 0);
@@ -104,7 +106,7 @@ export default function Header() {
           {/* ── Primary nav (Shown on inner pages, hidden on homepage) ─── */}
           {!isHomePage && (
             <nav className="site-nav">
-              {MAIN_NAV.map((item) => {
+              {menu.map((item) => {
                 const hasChildren = !!item.children?.length;
                 const isActive = isNavActive(item, pathname, locale);
                 const isOpen = openDropdown === item.id;
@@ -166,20 +168,74 @@ export default function Header() {
           {/* ── Right actions ─────────────────────────────── */}
             <div className="flex items-center gap-2 flex-shrink-0 ml-auto lg:ml-0 relative">
 
-              {/* Language / store switcher (commented out - English only)
+              {/* 1. Search Icon Button (First) */}
               <button
-                onClick={switchLocale}
-                className="hidden lg:flex items-center gap-1.5 text-[#111111]/60 hover:text-[#ed1c24] text-[13px] font-semibold transition-colors"
-                aria-label={`Switch to ${nextLocale === "ar" ? "Arabic" : "English"}`}
+                type="button"
+                onClick={() => setSearchModalOpen(true)}
+                className="header-icon-dark cursor-pointer"
+                aria-label="Search"
               >
-                <span>{switchLabel}</span>
-                <span className="text-sm leading-none">{locale === "en" ? "🇸🇦" : "🇬🇧"}</span>
+                <Search size={22} className="stroke-[2.2]" />
               </button>
 
-              <span className="hidden lg:block w-px h-5 bg-black/15 mx-0.5" />
-              */}
+              {/* 2. Account Dropdown Wrapper (Second) */}
+              <div
+                className="relative"
+                onMouseEnter={() => setAccountDropdownOpen(true)}
+                onMouseLeave={() => setAccountDropdownOpen(false)}
+              >
+                <Link
+                  href="/account"
+                  className="header-icon-dark"
+                  aria-label="My account"
+                >
+                  <User size={22} className="stroke-[2.2]" />
+                </Link>
 
-              {/* Cart Dropdown wrapper (First) */}
+                {/* Dropdown panel */}
+                {accountDropdownOpen && isLoggedIn && (
+                  <div className="absolute right-0 top-full pt-1.5 w-[220px] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="bg-white rounded-md shadow-2xl border border-gray-100 p-4 text-left">
+                      <div className="flex flex-col gap-2.5">
+                        <div className="border-b border-gray-100 pb-2">
+                          <p className="text-[10px] uppercase font-bold text-gray-400">
+                            {locale === "ar" ? "مرحباً" : "Welcome"}
+                          </p>
+                          <p className="text-[13px] font-bold text-gray-900 truncate">
+                            {customer?.firstname} {customer?.lastname}
+                          </p>
+                        </div>
+                        <Link
+                          href="/account?tab=dashboard"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="text-[12px] font-bold text-gray-700 hover:text-[#ed1c24] transition-colors"
+                        >
+                          {locale === "ar" ? "حسابي" : "MY ACCOUNT"}
+                        </Link>
+                        <Link
+                          href="/account?tab=wishlist"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="text-[12px] font-bold text-gray-700 hover:text-[#ed1c24] transition-colors"
+                        >
+                          {locale === "ar" ? "قائمة أمنياتي" : "MY WISHLIST"}
+                        </Link>
+                        <button
+                          onClick={async () => {
+                            setAccountDropdownOpen(false);
+                            await logout();
+                            router.push(`/${locale}`);
+                          }}
+                          className="w-full text-left text-[12px] font-bold text-gray-500 hover:text-[#ed1c24] transition-colors pt-2 border-t border-gray-100 cursor-pointer"
+                        >
+                          {locale === "ar" ? "تسجيل الخروج" : "SIGN OUT"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Cart Dropdown wrapper (Third) */}
               <div
                 className="relative"
                 onMouseEnter={() => setCartDropdownOpen(true)}
@@ -260,11 +316,14 @@ export default function Header() {
                                     >
                                       {item.product.name}
                                     </Link>
-                                    <div className="flex items-center gap-1.5 mt-1">
-                                      <span className="text-xs font-black text-[#ed1c24] tabular-nums">
-                                        {fmtMoney(item.prices.price.value)}
-                                      </span>
-                                    </div>
+                                     <div className="flex items-center gap-1.5 mt-1">
+                                       <span className="text-xs font-black text-[#ed1c24] tabular-nums">
+                                         {fmtMoney(
+                                           item.prices.price_including_tax?.value ??
+                                           (item.prices.price?.value != null ? Number((item.prices.price.value * 1.05).toFixed(2)) : 0)
+                                         )}
+                                       </span>
+                                     </div>
 
                                     {/* Qty and Delete */}
                                     <div className="flex items-center justify-between mt-2">
@@ -351,63 +410,6 @@ export default function Header() {
                 )}
               </div>
 
-              {/* Account Dropdown Wrapper (Second) */}
-              <div
-                className="relative hidden sm:block"
-                onMouseEnter={() => setAccountDropdownOpen(true)}
-                onMouseLeave={() => setAccountDropdownOpen(false)}
-              >
-                <Link
-                  href="/account"
-                  className="header-icon-dark"
-                  aria-label="My account"
-                >
-                  <User size={22} className="stroke-[2.2]" />
-                </Link>
-
-                {/* Dropdown panel */}
-                {accountDropdownOpen && isLoggedIn && (
-                  <div className="absolute right-0 top-full pt-1.5 w-[220px] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                    <div className="bg-white rounded-md shadow-2xl border border-gray-100 p-4 text-left">
-                      <div className="flex flex-col gap-2.5">
-                        <div className="border-b border-gray-100 pb-2">
-                          <p className="text-[10px] uppercase font-bold text-gray-400">
-                            {locale === "ar" ? "مرحباً" : "Welcome"}
-                          </p>
-                          <p className="text-[13px] font-bold text-gray-900 truncate">
-                            {customer?.firstname} {customer?.lastname}
-                          </p>
-                        </div>
-                        <Link
-                          href="/account?tab=dashboard"
-                          onClick={() => setAccountDropdownOpen(false)}
-                          className="text-[12px] font-bold text-gray-700 hover:text-[#ed1c24] transition-colors"
-                        >
-                          {locale === "ar" ? "حسابي" : "MY ACCOUNT"}
-                        </Link>
-                        <Link
-                          href="/account?tab=wishlist"
-                          onClick={() => setAccountDropdownOpen(false)}
-                          className="text-[12px] font-bold text-gray-700 hover:text-[#ed1c24] transition-colors"
-                        >
-                          {locale === "ar" ? "قائمة أمنياتي" : "MY WISHLIST"}
-                        </Link>
-                        <button
-                          onClick={async () => {
-                            setAccountDropdownOpen(false);
-                            await logout();
-                            router.push(`/${locale}`);
-                          }}
-                          className="w-full text-left text-[12px] font-bold text-gray-500 hover:text-[#ed1c24] transition-colors pt-2 border-t border-gray-100"
-                        >
-                          {locale === "ar" ? "تسجيل الخروج" : "SIGN OUT"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Mobile hamburger */}
               <button
                 onClick={() => setMobileOpen(true)}
@@ -458,19 +460,24 @@ export default function Header() {
 
             {/* Search */}
             <div className="px-5 py-4 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center gap-3 bg-white/8 rounded-xl px-4 py-3 border border-white/10">
-                <Search size={15} className="text-white/40 flex-shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search products…"
-                  className="bg-transparent text-sm text-white outline-none flex-1 placeholder:text-white/30"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  setSearchModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3 bg-white/10 hover:bg-white/15 rounded-xl px-4 py-3 border border-white/10 text-white text-xs font-semibold transition-colors cursor-pointer text-start"
+              >
+                <Search size={16} className="text-[#ed1c24] flex-shrink-0" />
+                <span className="text-white/70">
+                  {locale === "ar" ? "ابحث عن مقاس الإطار، السيارة، أو الماركة…" : "Search tyre size, vehicle or brand…"}
+                </span>
+              </button>
             </div>
 
             {/* Nav links */}
             <nav className="flex-1 overflow-y-auto px-5 py-4">
-              {MAIN_NAV.map((item) => {
+              {menu.map((item) => {
                 const hasChildren = !!item.children?.length;
                 const isActive = isNavActive(item, pathname, locale);
                 const isExpanded = mobileSubOpen === item.id;
@@ -613,6 +620,13 @@ export default function Header() {
           </div>
         </div>
       )}
+
+      {/* ── Search Popup Modal (Matches Image 1) ── */}
+      <HeaderSearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        locale={locale}
+      />
     </>
   );
 }

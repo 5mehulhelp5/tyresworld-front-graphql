@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Mail, Clock, ArrowUp } from "lucide-react";
 
-export default function Footer() {
+import { NavItem } from "@/src/config/navigation";
+
+export default function Footer({ menu }: { menu?: NavItem[] }) {
   const pathname = usePathname();
   const locale = pathname?.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
@@ -20,16 +22,41 @@ export default function Footer() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Extract dynamic categories and sub-items from Magento API menu
+  const tyresItem = menu?.find((m) => m.id === "tyres" || m.slug === "tyres");
+  /* "Special Tyre Offers" and "Car Battery Replacement" are static footer
+     chrome (like infoLinks below) — real, working pages that aren't part of
+     the Tyres menu entry itself. The items between them must come only from
+     the real kleverMainMenu data; when Magento returns no children, we show
+     just the two static links rather than a fabricated static submenu. */
+  const productLinks: { label: string; labelAr?: string; href: string }[] = [
+    { label: "Special Tyre Offers", labelAr: "عروض الإطارات المميزة", href: `/${locale}/special-offers` },
+    ...(tyresItem?.children ?? []).map((c) => ({
+      label: c.label,
+      href: `/${locale}/${c.slug}`,
+    })),
+    { label: "Car Battery Replacement", labelAr: "استبدال بطارية السيارة", href: `/${locale}/car-battery-replacement` },
+  ];
+
+  const infoLinks: { label: string; labelAr?: string; href: string }[] = [
+    { label: "About Us", labelAr: "من نحن", href: `/${locale}/about-us` },
+    { label: "Car Service", labelAr: "خدمة السيارات", href: `/${locale}/car-service` },
+    { label: "Contact Us", labelAr: "اتصل بنا", href: `/${locale}/contact` },
+    { label: "Fitting & Installation Partner", labelAr: "شركاء التركيب والتركيب", href: `/${locale}/fitting-installation-partner` },
+    { label: "FAQs", labelAr: "الأسئلة الشائعة", href: `/${locale}/faq` },
+    { label: "Blog", labelAr: "المدونة", href: `/${locale}/blog` },
+  ];
+
   return (
-    <footer className="section site-footer page-footer bg-[#121011] text-[#a0a0a0] pt-14 pb-0 relative">
+    <footer className="section site-footer page-footer bg-[#121011] text-[#a0a0a0] pt-9 sm:pt-11 pb-0 relative">
       <div className="container custom-width max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 pb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-8 pb-7 sm:pb-9">
           
           {/* Column 1: PRODUCT INFORMATION */}
           <div className="widget-col footer-links">
             <div className="widget">
-              <div className="widget-title mb-5">
-                <h3 className="text-white text-base sm:text-[17px] font-black uppercase tracking-wider m-0">
+              <div className="widget-title mb-3.5">
+                <h3 className="text-white text-base sm:text-[16px] font-black uppercase tracking-wider m-0">
                   {isAr ? "معلومات " : "PRODUCT "}
                   <span className="text-[#ed1c24] theme_color">
                     {isAr ? "المنتجات" : "INFORMATION"}
@@ -37,42 +64,14 @@ export default function Footer() {
                 </h3>
               </div>
               <div className="menu-footer-nav1-container">
-                <ul className="menu list-none p-0 m-0 flex flex-col gap-2.5 text-sm">
-                  <li>
-                    <Link href={`/${locale}/special-offers`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "عروض الإطارات المميزة" : "Special Tyre Offers"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/tyres/cars`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "البحث حسب المركبة" : "Search by Vehicle"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/tyres/size`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "البحث حسب المقاس" : "Search by Tyre size"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/brands`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "ماركات الإطارات" : "Tyre Brands"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/electric-vehicle-tyres-uae`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "إطارات السيارات الكهربائية" : "EV Tyres Online"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/car-battery-replacement`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "استبدال بطارية السيارة" : "Car Battery Replacement"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/rim-protectors`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "حماة الجنوط Alloygator" : "Alloygator Rim Protectors"}
-                    </Link>
-                  </li>
+                <ul className="menu list-none p-0 m-0 flex flex-col gap-2 text-[13px]">
+                  {productLinks.map((link, idx) => (
+                    <li key={idx}>
+                      <Link href={link.href} className="hover:text-[#ed1c24] transition-colors">
+                        {isAr && link.labelAr ? link.labelAr : link.label}
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -81,8 +80,8 @@ export default function Footer() {
           {/* Column 2: PREMIUM TYRE */}
           <div className="widget-col footer-links">
             <div className="widget">
-              <div className="widget-title mb-5">
-                <h3 className="text-white text-base sm:text-[17px] font-black uppercase tracking-wider m-0">
+              <div className="widget-title mb-3.5">
+                <h3 className="text-white text-base sm:text-[16px] font-black uppercase tracking-wider m-0">
                   {isAr ? "إطارات " : "PREMIUM "}
                   <span className="text-[#ed1c24] theme_color">
                     {isAr ? "فاخرة" : "TYRE"}
@@ -90,7 +89,7 @@ export default function Footer() {
                 </h3>
               </div>
               <div className="menu-footer-nav1-container">
-                <ul className="menu list-none p-0 m-0 flex flex-col gap-2.5 text-sm">
+                <ul className="menu list-none p-0 m-0 flex flex-col gap-2 text-[13px]">
                   <li>
                     <Link href={`/${locale}/tyres/brand/pirelli`} className="hover:text-[#ed1c24] transition-colors">
                       Pirelli
@@ -134,8 +133,8 @@ export default function Footer() {
           {/* Column 3: Why tyresworld.ae? */}
           <div className="widget-col footer-links">
             <div className="widget">
-              <div className="widget-title mb-5">
-                <h3 className="text-white text-base sm:text-[17px] font-black uppercase tracking-wider m-0">
+              <div className="widget-title mb-3.5">
+                <h3 className="text-white text-base sm:text-[16px] font-black uppercase tracking-wider m-0">
                   {isAr ? "لماذا " : "Why "}
                   <span className="text-[#ed1c24] theme_color">
                     tyresworld.ae?
@@ -143,32 +142,14 @@ export default function Footer() {
                 </h3>
               </div>
               <div className="menu-footer-nav1-container">
-                <ul className="menu list-none p-0 m-0 flex flex-col gap-2.5 text-sm">
-                  <li>
-                    <Link href={`/${locale}/about-us`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "من نحن" : "About Us"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/car-service`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "خدمة السيارات" : "Car Service"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/contact`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "اتصل بنا" : "Contact Us"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/fitting-installation-partner`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "شركاء التركيب والتركيب" : "Fitting & Installation Partner"}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/${locale}/blog`} className="hover:text-[#ed1c24] transition-colors">
-                      {isAr ? "المدونة" : "Blog"}
-                    </Link>
-                  </li>
+                <ul className="menu list-none p-0 m-0 flex flex-col gap-2 text-[13px]">
+                  {infoLinks.map((link, idx) => (
+                    <li key={idx}>
+                      <Link href={link.href} className="hover:text-[#ed1c24] transition-colors">
+                        {isAr && link.labelAr ? link.labelAr : link.label}
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -177,8 +158,8 @@ export default function Footer() {
           {/* Column 4: Website Information */}
           <div className="widget-col footer-links">
             <div className="widget">
-              <div className="widget-title mb-5">
-                <h3 className="text-white text-base sm:text-[17px] font-black uppercase tracking-wider m-0">
+              <div className="widget-title mb-3.5">
+                <h3 className="text-white text-base sm:text-[16px] font-black uppercase tracking-wider m-0">
                   {isAr ? "معلومات " : "Website "}
                   <span className="text-[#ed1c24] theme_color">
                     {isAr ? "الموقع" : "Information"}
@@ -186,7 +167,7 @@ export default function Footer() {
                 </h3>
               </div>
               <div className="menu-footer-nav1-container">
-                <ul className="menu list-none p-0 m-0 flex flex-col gap-2.5 text-sm">
+                <ul className="menu list-none p-0 m-0 flex flex-col gap-2 text-[13px]">
                   <li>
                     <Link href={`/${locale}/terms-conditions`} className="hover:text-[#ed1c24] transition-colors">
                       {isAr ? "الشروط والأحكام" : "Terms & Conditions"}
@@ -220,8 +201,8 @@ export default function Footer() {
           {/* Column 5: Get In Touch */}
           <div className="widget-col footer-contact">
             <div className="widget_text widget">
-              <div className="widget-title mb-5">
-                <h3 className="text-white text-base sm:text-[17px] font-black uppercase tracking-wider m-0">
+              <div className="widget-title mb-3.5">
+                <h3 className="text-white text-base sm:text-[16px] font-black uppercase tracking-wider m-0">
                   {isAr ? "تواصل " : "Get In "}
                   <span className="text-[#ed1c24] theme_color">
                     {isAr ? "معنا" : "Touch"}
@@ -229,29 +210,27 @@ export default function Footer() {
                 </h3>
               </div>
               <div className="textwidget custom-html-widget text-xs leading-relaxed">
-                <ul className="list-none p-0 m-0 flex flex-col gap-3">
-                  <li className="text-white/70">
-                    <b className="text-white block text-sm mb-1">DSP Trade Hub FZ-LLC</b>
+                <ul className="list-none p-0 m-0 flex flex-col gap-2.5">
+                  <li className="text-white/70 text-[12px]">
+                    <b className="text-white block text-[13px] mb-0.5">DSP Trade Hub FZ-LLC</b>
                     Compass Building, Al Shohada Road,
                     AL Hamra Industrial Zone-FZ, 
-                    Ras Al Khaimah,
-                    United Arab Emirates
+                    Ras Al Khaimah, UAE
                     <br />
                     <a
                       target="_blank"
                       rel="noopener noreferrer"
                       href="https://maps.app.goo.gl/tcDkQJXipiVixvZj8"
-                      className="text-[#ed1c24] hover:underline font-semibold block mt-1 text-sm"
+                      className="text-[#ed1c24] hover:underline font-semibold inline-block mt-0.5 text-xs"
                     >
                       {isAr ? "عرض على الخريطة" : "View on Map"}
                     </a>
-                    <span className="block mt-1">License: 5033149</span>
-                    <span className="block">TRN: 105036835400003</span>
+                    <span className="block mt-0.5 text-[11px] text-white/50">License: 5033149 | TRN: 105036835400003</span>
                   </li>
 
                   <li>
-                    <a href="mailto:info@tyresworld.ae" className="flex items-center gap-2 hover:text-[#ed1c24] transition-colors text-sm">
-                      <Mail size={15} className="text-[#ed1c24] flex-shrink-0" />
+                    <a href="mailto:info@tyresworld.ae" className="flex items-center gap-2 hover:text-[#ed1c24] transition-colors text-xs">
+                      <Mail size={14} className="text-[#ed1c24] flex-shrink-0" />
                       info@tyresworld.ae
                     </a>
                   </li>
@@ -261,17 +240,17 @@ export default function Footer() {
                       target="_blank"
                       rel="noopener noreferrer"
                       href="https://api.whatsapp.com/send/?phone=971505069575&text=Hi%20tyresworld.ae"
-                      className="flex items-center gap-2 hover:text-[#ed1c24] transition-colors text-sm font-semibold"
+                      className="flex items-center gap-2 hover:text-[#ed1c24] transition-colors text-xs font-semibold"
                     >
-                      <svg className="w-4 h-4 fill-[#25D366] flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.729-1.452L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.023-5.115-2.89-6.984C16.279 1.89 13.802 1.865 11.2 1.865c-5.437 0-9.863 4.421-9.868 9.868-.001 1.714.452 3.39 1.31 4.877L1.625 21.82l5.022-1.317zm11.393-5.263c-.3-.149-1.772-.875-2.046-.975-.274-.1-.474-.149-.674.15-.2.299-.774.974-.949 1.173-.175.2-.35.224-.65.075-.3-.15-1.263-.465-2.403-1.485-.888-.793-1.488-1.77-1.663-2.07-.175-.3-.019-.461.13-.61.135-.133.3-.349.45-.523.15-.174.2-.299.3-.499.1-.2.05-.375-.025-.524-.075-.15-.675-1.625-.925-2.225-.244-.589-.491-.51-.674-.519-.174-.009-.374-.01-.574-.01-.2 0-.525.075-.8.374-.275.299-1.05 1.024-1.05 2.5 0 1.475 1.075 2.9 1.225 3.1.15.2 2.11 3.22 5.116 4.52.716.31 1.274.496 1.71.636.72.228 1.376.196 1.894.118.578-.087 1.772-.724 2.022-1.424.25-.699.25-1.299.175-1.424-.075-.125-.275-.199-.575-.349z" />
+                      <svg className="w-3.5 h-3.5 fill-[#25D366] flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.729-1.452L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.023-5.115-2.89-6.984C16.279 1.89 13.802 1.865 11.2 1.865c-5.437 0-9.863 4.421-9.868 9.868-.001 1.714.452 3.39 1.31 4.877L1.625 21.82l5.022-1.317zm11.393-5.263c-.3-.149-1.772-.875-2.046-.975-.274-.1-.474-.149-.674.15-.2.299-.774.974-.949 1.173-.175.2-.35.224-.65.075-.3-.15-1.263-.465-2.403-1.485-.888-.793-1.488-1.77-1.663-2.07-.175-.3-.019-.461.13-.61.135-.133.3-.349.45-.523.15-.174.2-.299.3-.499.1-.2.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
                       </svg>
                       +971 50 506 9575
                     </a>
                   </li>
 
-                  <li className="flex items-start gap-2 text-white/70">
-                    <Clock size={15} className="text-[#ed1c24] flex-shrink-0 mt-0.5" />
+                  <li className="flex items-start gap-2 text-white/70 text-xs">
+                    <Clock size={14} className="text-[#ed1c24] flex-shrink-0 mt-0.5" />
                     <span>
                       Mon to Sat: 8:30 am - 6:00 pm
                       <br />
@@ -282,30 +261,31 @@ export default function Footer() {
               </div>
 
               {/* Social links */}
-              <div className="social-links hover-circle mt-5">
-                <div className="icon-lists list-custom flex items-center gap-3">
+              <div className="social-links hover-circle mt-3.5">
+                <div className="icon-lists list-custom flex items-center gap-2.5">
+                  {/* Facebook */}
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#ed1c24] flex items-center justify-center transition-colors"
-                    href="https://www.facebook.com/tyresworld.ae/"
+                    className="group w-8 h-8 rounded-full bg-[#1877F2] text-white flex items-center justify-center shadow-sm overflow-hidden"
+                    href="https://www.facebook.com/profile.php?id=61565576775985"
                     aria-label="Facebook"
                   >
-                    <svg fill="#fff" className="w-4 h-4" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M21.95 5.005l-3.306-.004c-3.206 0-5.277 2.124-5.277 5.415v2.495H10.05v4.515h3.317l-.004 9.575h4.641l.004-9.575h3.806l-.003-4.514h-3.803v-2.117c0-1.018.241-1.533 1.566-1.533l2.366-.001.01-4.256z"></path>
+                    <svg className="w-3.5 h-3.5 fill-current transition-transform duration-500 ease-in-out group-hover:rotate-[360deg]" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                     </svg>
                   </a>
+
+                  {/* Instagram */}
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#ed1c24] flex items-center justify-center transition-colors"
+                    className="group w-8 h-8 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white flex items-center justify-center shadow-sm overflow-hidden"
                     href="https://www.instagram.com/tyresworld.ae/"
                     aria-label="Instagram"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" clipRule="evenodd" d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16Z" fill="#fff"></path>
-                      <path d="M18 5C17.4477 5 17 5.44772 17 6C17 6.55228 17.4477 7 18 7C18.5523 7 19 6.55228 19 6C19 5.44772 18.5523 5 18 5Z" fill="#fff"></path>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M1.65396 4.27606C1 5.55953 1 7.23969 1 10.6V13.4C1 16.7603 1 18.4405 1.65396 19.7239C2.2292 20.8529 3.14708 21.7708 4.27606 22.346C5.55953 23 7.23969 23 10.6 23H13.4C16.7603 23 18.4405 23 19.7239 22.346C20.8529 21.7708 21.7708 20.8529 22.346 19.7239C23 18.4405 23 16.7603 23 13.4V10.6C23 7.23969 23 5.55953 22.346 4.27606C21.7708 3.14708 20.8529 2.2292 19.7239 1.65396C18.4405 1 16.7603 1 13.4 1H10.6C7.23969 1 5.55953 1 4.27606 1.65396C3.14708 2.2292 2.2292 3.14708 1.65396 4.27606ZM13.4 3H10.6C8.88684 3 7.72225 3.00156 6.82208 3.0751C5.94524 3.14674 5.49684 3.27659 5.18404 3.43597C4.43139 3.81947 3.81947 4.43139 3.43597 5.18404C3.27659 5.49684 3.14674 5.94524 3.0751 6.82208C3.00156 7.72225 3 8.88684 3 10.6V13.4C3 15.1132 3.00156 16.2777 3.0751 17.1779C3.14674 18.0548 3.27659 18.5032 3.43597 18.816C3.81947 19.5686 4.43139 20.1805 5.18404 20.564C5.49684 20.7234 5.94524 20.8533 6.82208 20.9249C7.72225 20.9984 8.88684 21 10.6 21H13.4C15.1132 21 16.2777 20.9984 17.1779 20.9249C18.0548 20.8533 18.5032 20.7234 18.816 20.564C19.5686 20.1805 20.1805 19.5686 20.564 18.816C20.7234 18.5032 20.8533 18.0548 20.9249 17.1779C20.9984 16.2777 21 15.1132 21 13.4V10.6C21 8.88684 20.9984 7.72225 20.9249 6.82208C20.8533 5.94524 20.7234 5.49684 20.564 5.18404C20.1805 4.43139 19.5686 3.81947 18.816 3.43597C18.5032 3.27659 18.0548 3.14674 17.1779 3.0751C16.2777 3.00156 15.1132 3 13.4 3Z" fill="#fff"></path>
+                    <svg className="w-3.5 h-3.5 fill-current transition-transform duration-500 ease-in-out group-hover:rotate-[360deg]" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
                     </svg>
                   </a>
                 </div>
@@ -317,10 +297,8 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Copyright strip — three columns (copyright · links · payment), mirroring
-          the theme's .footer-copyright. Extra bottom padding keeps it above the
-          sticky TyreFinder. */}
-      <div className="footer-copyright bg-[#1e1e20] pt-5 pb-20 sm:pb-24 border-t border-white/5">
+      {/* Copyright strip */}
+      <div className="footer-copyright bg-[#1e1e20] py-4 sm:py-5 border-t border-white/5">
         <div className="container custom-width max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col xl:flex-row items-center justify-between gap-4 xl:gap-6 text-center xl:text-left">
 
@@ -400,7 +378,7 @@ export default function Footer() {
       {/* Back to top */}
       <button
         type="button"
-        className={`fixed bottom-20 right-6 z-40 w-10 h-10 rounded-full bg-[#ed1c24] text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:bg-[#c6181d] hover:scale-110 ${
+        className={`fixed bottom-6 left-6 z-40 w-10 h-10 rounded-full bg-[#ed1c24] text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:bg-[#c6181d] hover:scale-110 ${
           showTop ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
         }`}
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}

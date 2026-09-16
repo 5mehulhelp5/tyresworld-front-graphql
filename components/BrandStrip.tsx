@@ -11,7 +11,9 @@ type Brand = {
   name: string;
   filterValue: string;
   logo: string;
-  count: number;
+  category: string;
+  isFeatured: boolean;
+  sortOrder: number;
 };
 
 function toBrand(entry: Partial<Brand> | null | undefined): Brand | null {
@@ -20,7 +22,14 @@ function toBrand(entry: Partial<Brand> | null | undefined): Brand | null {
   const logo = entry?.logo;
 
   if (!name || !filterValue || !logo) return null;
-  return { name, filterValue, logo, count: entry?.count ?? 0 };
+  return {
+    name,
+    filterValue,
+    logo,
+    category: entry?.category ?? "Other",
+    isFeatured: entry?.isFeatured ?? false,
+    sortOrder: entry?.sortOrder ?? 0,
+  };
 }
 
 export default function BrandStrip() {
@@ -39,10 +48,20 @@ export default function BrandStrip() {
         if (!active) return;
         const list: Brand[] = (data?.brands ?? [])
           .map(toBrand)
-          .filter((b: Brand | null): b is Brand => b !== null);
+          .filter((b: Brand | null): b is Brand => b !== null)
+          // This strip is specifically "Shop by TYRE Brands" — the same
+          // endpoint now also returns Battery/Wheels/Motorcycle categories.
+          .filter((b: Brand) => b.category === "Tyres");
 
+        // Admin-configured featured flag + sort order (real Magento data)
+        // instead of the old "most products in stock" heuristic.
         setBrands(
-          [...list].sort((a, b) => b.count - a.count).slice(0, PREVIEW_COUNT),
+          [...list]
+            .sort((a, b) => {
+              if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
+              return a.sortOrder - b.sortOrder;
+            })
+            .slice(0, PREVIEW_COUNT),
         );
       })
       .catch((err) => {
@@ -94,12 +113,11 @@ export default function BrandStrip() {
           <div className="brands-list">
             <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 list-none p-0 m-0">
               {brands!.map((brand) => {
-                const brandSlug = brand.name.toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/(^-|-$)/g, "");
                 return (
                   <li key={brand.filterValue}>
                     <div className="box h-[76px] bg-white rounded-xl border border-gray-200/80 hover:border-[#ed1c24] hover:shadow-md flex items-center justify-center p-2.5 transition-all duration-300 group">
                       <Link
-                        href={`/${locale}/tyres/brand/${brandSlug || encodeURIComponent(brand.filterValue)}`}
+                        href={`/${locale}/tyres?mgs_brand=${encodeURIComponent(brand.filterValue)}`}
                         className="brand-link w-full h-full flex items-center justify-center"
                         aria-label={`${brand.name} tyres`}
                       >
