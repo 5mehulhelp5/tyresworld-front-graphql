@@ -210,15 +210,24 @@ export default async function DynamicSlugPage({ params }: PageProps) {
        applied to category descriptions in CategoryPageInner.tsx. */
     /* This content's own <img> src/href attributes are root-relative
        ("/media/images/services/...") — correct on the Magento-served page
-       itself, but resolved against OUR origin here, where they 404. Route
-       them through /api/media instead, which fetches from the staging
-       origin server-side (with the Basic Auth header a plain <img> can't
-       send) and streams the bytes back same-origin — see that route for
-       why. (Previously rewritten to the public storefront domain, but not
-       every CMS-referenced asset is actually synced there — e.g.
-       /media/images/testimonials/author.png 404s on the public domain
-       while it's a real file on staging — so that public-domain mirror
-       can't be relied on to have everything CMS content links to.) */
+       itself, but resolved against OUR origin here, where they 404. The
+       fallback below routes them through /api/media, which fetches from
+       the staging origin server-side (with the Basic Auth header a plain
+       <img> can't send) — but that origin sits behind Cloudflare, which
+       blocks/challenges Vercel's serverless IP ranges, so the proxy 403s
+       in production even with correct credentials. For the specific,
+       known, unchanging images referenced by CMS pages we've actually
+       audited (not per-request dynamic data), the real files have been
+       downloaded once into public/images/ and are mapped here directly —
+       same real images, no live fetch, no Cloudflare dependency. Any
+       CMS-linked image not in this map still falls through to the
+       /api/media proxy below (unaffected, unaudited pages keep their
+       prior behavior). */
+    const KNOWN_CMS_MEDIA_MAP: Record<string, string> = {
+      "/media/images/services/best-car-insurance-agent-uae.webp": "/images/services/best-car-insurance-agent-uae.webp",
+      "/media/images/services/comprehensive-car-insurance.webp": "/images/services/comprehensive-car-insurance.webp",
+      "/media/images/services/third-party-car-insurance-uae.webp": "/images/services/third-party-car-insurance-uae.webp",
+    };
     /* Some CMS pages (e.g. car-battery-replacement) are authored as a
        custom Magento .phtml block reference rather than Page Builder HTML.
        The GraphQL cmsPage.content resolver can't render that block outside
@@ -235,11 +244,16 @@ export default async function DynamicSlugPage({ params }: PageProps) {
 
     const decodedContent = isBrokenTemplateError
       ? ""
-      : page.content
-          .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-          .replace(/&amp;/g, "&").replace(/\\"/g, '"')
-          .replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n")
-          .replace(/((?:src|href))="\/media\//g, `$1="/api/media/`);
+      : (() => {
+          let html = page.content
+            .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+            .replace(/&amp;/g, "&").replace(/\\"/g, '"')
+            .replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
+          for (const [magentoPath, localPath] of Object.entries(KNOWN_CMS_MEDIA_MAP)) {
+            html = html.split(`"${magentoPath}"`).join(`"${localPath}"`);
+          }
+          return html.replace(/((?:src|href))="\/media\//g, `$1="/api/media/`);
+        })();
     const cmsBgImage = (function getCmsHeroBanner(k: string, t: string) {
       const key = (k || "").toLowerCase();
       const title = (t || "").toLowerCase();

@@ -15,28 +15,33 @@ import { APP_CONFIG } from "@/src/config/app-config";
    isBrokenTemplateError) — there is no real markup retrievable through
    any GraphQL field for this page.
    The live PHP-rendered page at this same URL works fine, so this
-   component transcribes ITS real, live copy and real image assets
-   (proxied through /api/media, same pattern as the rest of the CMS
-   branch) verbatim — nothing here is invented. Same reasoning as
-   components/ev/EvTyresLanding.tsx for the EV Tyres CMS page, which
-   has the identical broken-template problem.
-───────────────────────────────────────────────────────────────── */
+   component transcribes ITS real, live copy verbatim — nothing here
+   is invented. Same reasoning as components/ev/EvTyresLanding.tsx for
+   the EV Tyres CMS page, which has the identical broken-template problem.
 
-const media = (path: string) => `/api/media/${path}`;
+   Images: these used to be proxied live through /api/media (a
+   server-side fetch to the staging Magento origin with Basic Auth).
+   That origin sits behind Cloudflare, which blocks/challenges Vercel's
+   serverless IP ranges — the proxy works locally but 403s in
+   production. Since these are the exact same real assets every time
+   (not per-request dynamic data), they've been downloaded once and are
+   now served as ordinary local files under public/images/ — same
+   real images, no live fetch, no Cloudflare dependency at all.
+───────────────────────────────────────────────────────────────── */
 
 const STEPS = [
   {
-    icon: media("images/call-whatsup.png"),
+    icon: "/images/call-whatsup.png",
     title: "Contact TyresWorld",
     body: "Call or message us on WhatsApp with your car details and location — our team will confirm everything and get moving.",
   },
   {
-    icon: media("images/car-location.png"),
+    icon: "/images/car-location.png",
     title: "We Come To You",
     body: "A technician arrives at your location, wherever you are in the city, with the correct battery ready to fit.",
   },
   {
-    icon: media("images/battery-replace-icon.png"),
+    icon: "/images/battery-replace-icon.png",
     title: "Fitted, Tested, Ready To Drive",
     body: "We install the new battery and run a full check to confirm everything's working properly before we leave.",
   },
@@ -99,11 +104,11 @@ const WHY_CHOOSE = [
 ];
 
 const BRANDS = [
-  { logo: media("images/amaron-battery.png"), name: "Amaron" },
-  { logo: media("images/solite_1.jpg"), name: "Solite" },
-  { logo: media("images/volcan_1.png"), name: "Volcan" },
-  { logo: media("images/varta-battery.jpg"), name: "Varta" },
-  { logo: media("images/bosch_1.png"), name: "Bosch" },
+  { logo: "/images/amaron-battery.png", name: "Amaron" },
+  { logo: "/images/solite_1.jpg", name: "Solite" },
+  { logo: "/images/volcan_1.png", name: "Volcan" },
+  { logo: "/images/varta-battery.jpg", name: "Varta" },
+  { logo: "/images/bosch_1.png", name: "Bosch" },
 ];
 
 function whatsappHref(text: string) {
@@ -428,7 +433,7 @@ export default function CarBatteryReplacementLanding() {
               <div className="relative min-h-[300px] lg:min-h-[450px]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={media("images/services/vehicle-battery-replacement-service-uae.webp")}
+                  src="/images/services/vehicle-battery-replacement-service-uae.webp"
                   alt="Quick Vehicle Battery Replacement Service in UAE"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
@@ -485,7 +490,7 @@ export default function CarBatteryReplacementLanding() {
               <div className="relative min-h-[300px] lg:min-h-[450px] order-1 lg:order-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={media("images/services/car-battery-health-check-service-uae.webp")}
+                  src="/images/services/car-battery-health-check-service-uae.webp"
                   alt="Expert Car Battery Health Check in UAE"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
