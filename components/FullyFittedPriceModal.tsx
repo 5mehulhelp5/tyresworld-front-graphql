@@ -1,6 +1,7 @@
 "use client";
 
 import { X, CheckCircle2 } from "lucide-react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 /**
  * "Fully Fitted Price per Item" inclusions popup — what that price covers.
@@ -25,6 +26,8 @@ export default function FullyFittedPriceModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  useScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (

@@ -18,6 +18,7 @@ import TyreListingCardSkeleton from "@/components/TyreListingCardSkeleton";
 import TyreFinder from "@/components/TyreFinder";
 import StickyBottomFinder from "@/components/home/partora/StickyBottomFinder";
 import VehicleFitmentModal from "@/components/VehicleFitmentModal";
+import { useScrollLock } from "@/lib/useScrollLock";
 import { APP_CONFIG } from "@/src/config/app-config";
 import JsonLd from "@/components/JsonLd";
 import { useCurrencyCode } from "@/lib/store-config-context";
@@ -946,6 +947,8 @@ export default function ProductDetailInner({
   const [isVehicleFitmentOpen, setIsVehicleFitmentOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ProductTabKey>("overview");
 
+  useScrollLock(isPriceInfoOpen);
+
   const sizeMatch = specs.size?.match(/(\d{3})\/(\d{2,3})\s*R(\d{2})/i);
   const width = product.width ?? sizeMatch?.[1] ?? "";
   const height = product.height ?? sizeMatch?.[2] ?? "";
@@ -1316,6 +1319,8 @@ function ShareModal({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useScrollLock(isOpen);
 
   // Prefill sender if customer info exists
   useEffect(() => {

@@ -64,14 +64,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "width, height and rim are required" }, { status: 400 });
   }
 
-  const url = `${MAGENTO_ORIGIN}/${store}/${FITMENT_PATH}`;
+  /* This controller isn't registered under a store-code URL prefix — a
+     request to /{store}/partsfinder/... 404s (Magento's own 404 page, not
+     ours), while the same request to /partsfinder/... succeeds with real
+     data. Store/locale selection for this endpoint goes through the real
+     Store header magentoHeaders() already sets below, not the URL path
+     (confirmed live: real vehicles/models/years come back correctly). */
+  const url = `${MAGENTO_ORIGIN}/${FITMENT_PATH}`;
   const body = new URLSearchParams({
     form_key: "",
     width,
     height,
     rim,
     // The controller reads uenc but doesn't validate it; the page URL is fine.
-    uenc: Buffer.from(`${MAGENTO_ORIGIN}/${store}/tyres`).toString("base64"),
+    uenc: Buffer.from(`${MAGENTO_ORIGIN}/tyres`).toString("base64"),
   });
 
   try {

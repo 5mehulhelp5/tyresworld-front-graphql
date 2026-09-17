@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronDown, Search, Loader2 } from "lucide-react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 export interface FilterOption {
   label: string;
@@ -151,6 +152,8 @@ export default function FilterPanel({
   dir = "ltr",
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useScrollLock(open);
 
   /* Width/Height/Rim (front + rear/staggered variants) are deliberately
      hidden from this drawer — by explicit product decision, not because

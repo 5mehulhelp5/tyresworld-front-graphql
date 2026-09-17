@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 interface AddToCartModalProps {
   productName: string | null;
@@ -21,6 +22,8 @@ export default function AddToCartModal({
   const pathname = usePathname();
   const locale = pathname?.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
+
+  useScrollLock(open);
 
   useEffect(() => {
     setMounted(true);

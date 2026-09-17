@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
+import { useScrollLock } from "@/lib/useScrollLock";
 import { Money } from "@/components/Price";
 import { navHref, navLabel, isNavActive, type NavItem } from "@/src/config/navigation";
 import HomeSearchBar from "@/components/home/partora/HomeSearchBar";
@@ -48,6 +49,7 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
   }
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  useScrollLock(mobileOpen);
   const [mobileSubOpen, setMobileSubOpen] = useState<string | null>(null);
   const { customer, isLoggedIn, logout } = useAuth();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);

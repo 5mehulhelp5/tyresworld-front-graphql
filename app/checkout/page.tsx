@@ -17,6 +17,7 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { Money } from "@/components/Price";
 import Footer from "@/components/layout/Footer";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 type Agreement = {
   agreement_id: number;
@@ -143,6 +144,7 @@ function CheckoutContent() {
   const [selectedBillingOption, setSelectedBillingOption] = useState<string>("0");
   const [selectedShippingOption, setSelectedShippingOption] = useState<string>("0");
   const [showNewAddressModal, setShowNewAddressModal] = useState(false);
+  useScrollLock(showNewAddressModal);
   const [modalAddress, setModalAddress] = useState({
     firstname: "",
     lastname: "",
