@@ -86,12 +86,19 @@ function sortSizeOpts(opts: AttrOption[]): AttrOption[] {
   });
 }
 
+/* Vehicle-make logos: this store's own real logo set (downloaded once from
+   Magento's static theme folder — the same assets the live site itself
+   uses — into public/vehicle-logos/, since that origin sits behind
+   Cloudflare/Basic Auth and can't be fetched live from the browser or from
+   Vercel's serverless functions). No external hosts (raw.githubusercontent,
+   wheel-api.klever.ae) — a make with no local file just shows the generic
+   car icon below, an honest empty state instead of a third-party guess. */
 function getVehicleLogo(label: string): string {
   const slug = label
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  return `https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/${slug}.png`;
+  return `/vehicle-logos/${slug}.png`;
 }
 
 function VehicleLogo({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -100,9 +107,8 @@ function VehicleLogo({ label, logoUrl }: { label: string; logoUrl?: string }) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
-  const primaryUrl = logoUrl || `https://wheel-api.klever.ae/logos/${slug}.png`;
-  const fallbackUrl = `https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/${slug}.png`;
-  const fallbackUrl2 = `https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/${slug}.png`;
+  const primaryUrl = logoUrl || `/vehicle-logos/${slug}.png`;
+  const fallbackUrl = `/vehicle-logos/${slug}.png`;
 
   const [currentSrc, setCurrentSrc] = useState(primaryUrl);
   const [attempt, setAttempt] = useState(0);
@@ -110,12 +116,9 @@ function VehicleLogo({ label, logoUrl }: { label: string; logoUrl?: string }) {
   const [isError, setIsError] = useState(false);
 
   const handleError = () => {
-    if (attempt === 0) {
+    if (attempt === 0 && currentSrc !== fallbackUrl) {
       setAttempt(1);
       setCurrentSrc(fallbackUrl);
-    } else if (attempt === 1) {
-      setAttempt(2);
-      setCurrentSrc(fallbackUrl2);
     } else {
       setIsError(true);
       setIsLoaded(true);

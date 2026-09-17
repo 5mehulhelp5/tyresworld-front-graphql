@@ -2,18 +2,24 @@ import { APP_CONFIG } from "@/src/config/app-config";
 
 /**
  * Vehicle-make logo assets live on the storefront's static Magento theme
- * folder (Hdweb_Vehicles), which — like the rest of the staging origin —
- * sits behind HTTP Basic Auth. A plain <img src="https://www1.tyresworld.ae/...">
- * from the browser has no credentials, so every logo request comes back
- * 401 and silently disappears (VehicleFitmentModal's onError hides it).
+ * folder (Hdweb_Vehicles), which sits behind HTTP Basic Auth *and*
+ * Cloudflare — the latter blocks/challenges Vercel's serverless IP ranges,
+ * so a live server-side proxy (the old /api/vehicle-logo route) works
+ * locally but 403s in production even with correct credentials.
  *
- * The fix: never point <img> at the staging origin directly. Build the
- * make-slug filename here, and let /api/vehicle-logo fetch it server-side
- * (where magentoHeaders() adds the Basic Auth header) and stream the bytes
- * back same-origin.
+ * Fix: the real make logos this store actually needs (same finite set
+ * /api/vehicles' real make list resolves to, confirmed against the live
+ * origin) have been downloaded once into public/vehicle-logos/ — same
+ * real assets, served as ordinary static files, no live fetch, no
+ * Cloudflare dependency. A make with no local file just shows the
+ * generic car icon (VehicleLogo's own error state) — an honest empty
+ * state, not an external third-party logo service.
  */
 export const MAGENTO_ORIGIN = APP_CONFIG.magento.graphqlUrl.replace(/\/graphql\/?$/, "");
 
+/** No longer used by vehicleLogoProxyUrl (see above) — kept only because
+    the old /api/vehicle-logo route (now unreachable in normal use) still
+    imports it; left in place rather than touching that route file. */
 export const VEHICLE_LOGO_BASE =
   `${MAGENTO_ORIGIN}/static/frontend/Klever/automotive/en_US/Hdweb_Vehicles/images/logo`;
 
@@ -24,7 +30,7 @@ export function isValidVehicleLogoSlug(slug: string): boolean {
   return SLUG_RE.test(slug);
 }
 
-/** Same-origin URL the browser can safely load; proxied by /api/vehicle-logo. */
+/** Local static asset — same real logo, no live proxy fetch. */
 export function vehicleLogoProxyUrl(slug: string): string {
-  return `/api/vehicle-logo/${encodeURIComponent(slug)}.png`;
+  return `/vehicle-logos/${encodeURIComponent(slug)}.png`;
 }

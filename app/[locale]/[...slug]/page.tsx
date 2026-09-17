@@ -224,9 +224,79 @@ export default async function DynamicSlugPage({ params }: PageProps) {
        /api/media proxy below (unaffected, unaudited pages keep their
        prior behavior). */
     const KNOWN_CMS_MEDIA_MAP: Record<string, string> = {
+      // car-insurance
       "/media/images/services/best-car-insurance-agent-uae.webp": "/images/services/best-car-insurance-agent-uae.webp",
       "/media/images/services/comprehensive-car-insurance.webp": "/images/services/comprehensive-car-insurance.webp",
       "/media/images/services/third-party-car-insurance-uae.webp": "/images/services/third-party-car-insurance-uae.webp",
+
+      // Shared across every Car Services sub-page: the real live site itself
+      // reuses one generic avatar for every named testimonial (confirmed —
+      // same /media/images/testimonials/author.png behind every different
+      // name), so mapping all of them to our one real local avatar matches
+      // the actual live design, not an invented substitute.
+      "/media/images/testimonials/author.png": "/images/home/author.png",
+
+      // car-tyre-service — no local photo exists for several of these
+      // specific angles (puncture repair, nitrogen filling, TPMS, rotation,
+      // inspection), so they reuse the closest real tyre/alignment/balancing
+      // photo already used elsewhere on the real site.
+      "/media/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp": "/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp",
+      "/media/images/services/qucik-tyre-puncture-repair-shop-abu-dhabi.webp": "/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp",
+      "/media/images/services/tire-rotation-service-near-me-abu-dhabi.webp": "/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp",
+      "/media/images/services/car-wheel-balancing-shop-abu-dhabi.webp": "/images/services/expert-car-wheel-balancing-service-abu-dhabi.webp",
+      "/media/images/services/car-wheel-alignment-service-abu-dhabi.webp": "/images/services/benefits-regular-wheel-alignment-service-uae.webp",
+      "/media/images/services/regular-tyre-inspection-service-abu-dhabi.webp": "/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp",
+      "/media/images/services/nitrogen-filling-service-tyres-abu-dhabi.webp": "/images/services/best-tyre-fitting-service-shop-abu-dhabi.webp",
+      "/media/images/services/tpms-service-abu-dhabi.webp": "/images/services/benefits-regular-wheel-alignment-service-uae.webp",
+
+      // car-battery-service
+      "/media/images/services/car-battery-testing-diagnostics-service-abu-dhabi.webp": "/images/services/car-battery-health-check-service-uae.webp",
+      "/media/images/services/car-battery-replacement-service-abu-dhabi.webp": "/images/services/car-battery-replacement-service-abu-dhabi.webp",
+      "/media/images/services/car-battery-terminal-cleaning-abu-dhabi.webp": "/YourTrustedAutoCare/car-battery.jpg",
+      "/media/images/services/car-battery-alternator-charging-repair.webp": "/images/services/vehicle-battery-replacement-service-uae.webp",
+      "/media/images/services/car-battery-maintenance-plans.webp": "/images/services/car-battery-health-check-service-uae.webp",
+
+      // car-ac-service — no local AC-specific photo beyond the one real match.
+      "/media/images/services/car-ac-gas-refill-service-abu-dhabi.webp": "/images/services/expert-car-ac-service-workshop-near-me.webp",
+      "/media/images/services/car-ac-filter-replacement-service-abu-dhabi.webp": "/images/services/expert-car-ac-service-workshop-near-me.webp",
+      "/media/images/services/car-ac-service-signs.webp": "/images/services/expert-car-ac-service-workshop-near-me.webp",
+      "/media/images/services/expert-car-ac-service-workshop-near-me.webp": "/images/services/expert-car-ac-service-workshop-near-me.webp",
+
+      // car-brake-service — one real local brake photo covers all 8 angles.
+      "/media/images/services/car-brake-pad-replacement-services-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/brake-disc-skimming-service-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-brake-fluid-replacement-service-tyresworld.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-brake-caliper-services-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-abs-service-shop-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-brake-master-cylinder-service-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-hand-brake-repair-service-uae.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+      "/media/images/services/car-brake-sensor-repair-abu-dhabi.webp": "/images/services/car-brake-pad-replacement-services-abu-dhabi.webp",
+
+      // car-oil-change-service
+      "/media/images/services/car-engine-oil-change-abu-dhabi.webp": "/images/services/car-engine-oil-change-abu-dhabi.webp",
+      "/media/images/services/car-coolant-replacement-service-abu-dhabi.webp": "/images/services/car-engine-oil-change-abu-dhabi.webp",
+      "/media/images/services/car-oil-filter-replacement-service-abu-dhabi.webp": "/images/services/car-engine-oil-change-abu-dhabi.webp",
+      "/media/images/services/transmission-oil-change-service-abu-dhabi.webp": "/images/services/car-engine-oil-change-abu-dhabi.webp",
+
+      // car-mechanical-service
+      "/media/images/services/car-engine-repair-service-abu-dhabi.webp": "/images/services/best-car-mechanical-services-abu-dhabi.webp",
+      "/media/images/services/car-transmission-service-by-expert-in-abu-dhabi.webp": "/images/services/best-car-mechanical-services-abu-dhabi.webp",
+      "/media/images/services/car-suspension-repair-service-abu-dhabi.webp": "/images/services/best-car-mechanical-services-abu-dhabi.webp",
+
+      // car-wheel-alignment-service
+      "/media/images/services/car-wheel-alignment-check-abu-dhabi.webp": "/images/services/benefits-regular-wheel-alignment-service-uae.webp",
+      "/media/images/services/expert-car-wheel-alignment-service-abu-dhabi.webp": "/images/services/benefits-regular-wheel-alignment-service-uae.webp",
+      "/media/images/services/when-car-wheel-alignment-service-require.webp": "/images/services/benefits-regular-wheel-alignment-service-uae.webp",
+
+      // car-wheel-balancing-service
+      "/media/images/services/car-wheel-balancing-free-check-abu-dhabi.webp": "/images/services/expert-car-wheel-balancing-service-abu-dhabi.webp",
+      "/media/images/services/car-tyres-balancing-check-abu-dhabi.webp": "/images/services/expert-car-wheel-balancing-service-abu-dhabi.webp",
+      "/media/images/services/expert-car-wheel-balancing-service-abu-dhabi.webp": "/images/services/expert-car-wheel-balancing-service-abu-dhabi.webp",
+
+      // car-rim-repair-service
+      "/media/images/services/car-rim-repair-service-abu-dhabi.webp": "/images/services/car-rim-repair-service-abu-dhabi.webp",
+      "/media/images/services/car-new-alloy-wheels-abu-dhabi.webp": "/YourTrustedAutoCare/car-rim.jpg",
+      "/media/images/services/alloygator-rim-protectors-abu-dhabi.webp": "/images/services/car-rim-repair-service-abu-dhabi.webp",
     };
     /* Some CMS pages (e.g. car-battery-replacement) are authored as a
        custom Magento .phtml block reference rather than Page Builder HTML.
