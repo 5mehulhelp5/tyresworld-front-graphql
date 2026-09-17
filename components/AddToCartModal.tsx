@@ -26,16 +26,6 @@ export default function AddToCartModal({
     setMounted(true);
   }, []);
 
-  // Lock scroll when modal is open
-  useEffect(() => {
-    if (!open) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open]);
-
   // Handle escape key
   useEffect(() => {
     if (!open) return;
@@ -76,10 +66,10 @@ export default function AddToCartModal({
         <button
           type="button"
           onClick={onClose}
-          className={`absolute top-4 ${isAr ? "left-4" : "right-4"} w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer`}
+          className={`absolute top-4 ${isAr ? "left-4" : "right-4"} w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer`}
           aria-label="Close"
         >
-          <X size={20} strokeWidth={2.5} />
+          <X size={20} strokeWidth={2.2} />
         </button>
 
         {/* Modal Title */}
@@ -105,9 +95,9 @@ export default function AddToCartModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto min-w-[190px] bg-black hover:bg-[#ed1c24] active:bg-[#c6181d] text-white text-[13px] font-black uppercase tracking-wider py-3.5 px-6 rounded-lg transition-all text-center cursor-pointer"
+            className="btn-slide-black w-full sm:w-auto min-w-[190px] text-[13px] font-black uppercase tracking-wider py-3.5 px-6 rounded-lg shadow-md cursor-pointer"
           >
-            {isAr ? "متابعة التسوق" : "CONTINUE SHOPPING"}
+            <span>{isAr ? "متابعة التسوق" : "CONTINUE SHOPPING"}</span>
           </button>
         </div>
       </div>

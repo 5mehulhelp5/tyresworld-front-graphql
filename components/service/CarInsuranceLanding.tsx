@@ -221,7 +221,7 @@ export default function CarInsuranceLanding() {
   return (
     <div className="bg-white">
       {/* ── Intro: heading, copy, callback form ─────────────────── */}
-      <section className="container py-10 lg:py-14">
+      <section className="container py-2 lg:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr] gap-8 lg:gap-10 items-start">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 uppercase tracking-tight mb-3">

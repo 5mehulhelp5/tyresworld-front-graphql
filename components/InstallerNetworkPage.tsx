@@ -99,6 +99,8 @@ function InstallerNetworkContent() {
     };
   }, [locale]);
 
+  const [isGeoAddress, setIsGeoAddress] = useState(false);
+
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       alert(isAr ? "متصفحك لا يدعم تحديد الموقع الجغرافي." : "Geolocation is not supported by your browser.");
@@ -106,16 +108,34 @@ function InstallerNetworkContent() {
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords({ lat, lng });
         setSelectedCity(isAr ? "الكل" : "All");
-        setLocating(false);
+
+        try {
+          const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+          const data = await res.json();
+          if (data?.address) {
+            setSearchQuery(data.address);
+            setIsGeoAddress(true);
+          } else {
+            setSearchQuery(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+            setIsGeoAddress(true);
+          }
+        } catch {
+          setSearchQuery(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          setIsGeoAddress(true);
+        } finally {
+          setLocating(false);
+        }
       },
       (err) => {
         console.warn("Geolocation error:", err.message);
         setLocating(false);
       },
-      { timeout: 10000 }
+      { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
@@ -135,7 +155,7 @@ function InstallerNetworkContent() {
       );
     }
 
-    if (searchQuery.trim()) {
+    if (searchQuery.trim() && !isGeoAddress) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (s) =>
@@ -147,7 +167,17 @@ function InstallerNetworkContent() {
 
     result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     return result;
-  }, [branches, selectedCity, searchQuery, userCoords]);
+  }, [branches, selectedCity, searchQuery, userCoords, isGeoAddress]);
+
+  // Sync default selected store
+  useEffect(() => {
+    if (filteredStores.length > 0) {
+      const exists = filteredStores.some((s) => s.id === selectedStoreId);
+      if (!exists || !selectedStoreId) {
+        setSelectedStoreId(filteredStores[0].id);
+      }
+    }
+  }, [filteredStores, selectedStoreId]);
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="bg-white min-h-screen pb-16">
@@ -281,14 +311,20 @@ function InstallerNetworkContent() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsGeoAddress(false);
+              }}
               placeholder={isAr ? "أدخل اسم المنطقة أو المدينة..." : "Enter area or city"}
               className="w-full text-xs sm:text-sm text-gray-900 bg-transparent focus:outline-none placeholder:text-gray-400 font-medium"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsGeoAddress(false);
+                }}
                 className="text-gray-400 hover:text-gray-700 text-xs px-1.5 py-0.5 rounded-full hover:bg-gray-100 transition-colors"
                 title="Clear"
               >
@@ -300,7 +336,7 @@ function InstallerNetworkContent() {
           <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <button
               type="button"
-              className="bg-black hover:bg-[#ed1c24] text-white text-xs font-black uppercase tracking-wider px-6 py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="btn-cta text-xs px-6 py-2.5 rounded-lg gap-1.5"
             >
               <Search size={14} strokeWidth={2.5} />
               <span>{isAr ? "بحث" : "Search"}</span>
@@ -343,61 +379,77 @@ function InstallerNetworkContent() {
                 return (
                   <div
                     key={store.id}
-                    className={`group bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-2xs ${
+                    onClick={() => setSelectedStoreId(store.id)}
+                    className={`group bg-white rounded-xl border transition-all duration-200 overflow-hidden cursor-pointer ${
                       isSelected
-                        ? "border-[#ed1c24]/50 ring-2 ring-[#ed1c24]/10 shadow-sm"
-                        : "border-gray-200 hover:border-gray-300 hover:shadow-xs"
+                        ? "border-gray-300 shadow-xs rtl:border-r-4 rtl:border-r-[#ed1c24] ltr:border-l-4 ltr:border-l-[#ed1c24]"
+                        : "border-gray-200/90 hover:border-gray-300 hover:shadow-2xs"
                     }`}
                   >
-                    <div className="p-4 sm:p-5 flex items-start gap-3.5 sm:gap-4">
-                      <StoreBadgeIcon />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-extrabold text-sm sm:text-base text-gray-950 uppercase tracking-tight line-clamp-1">
-                          {store.name}
-                        </h3>
-                        <p className="text-xs text-gray-500 flex items-start gap-1 mt-1 leading-snug">
-                          <MapPin size={13} className="text-gray-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{store.address}</span>
-                        </p>
-                        {store.distanceKm !== undefined && (
-                          <p className="text-xs font-bold text-gray-800 mt-1.5 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#ed1c24]" />
-                            <span>{store.distanceKm.toFixed(2)} kilometer</span>
+                    <div className="p-4 sm:p-5">
+                      <div className="flex items-start gap-3.5 sm:gap-4">
+                        <StoreBadgeIcon />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-extrabold text-xs sm:text-sm text-gray-950 uppercase tracking-tight line-clamp-1">
+                            {store.name}
+                          </h3>
+                          <p className="text-xs text-gray-500 flex items-start gap-1 mt-1 leading-snug">
+                            <MapPin size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                            <span className="line-clamp-2">{store.address}</span>
                           </p>
-                        )}
+                          {store.distanceKm !== undefined && (
+                            <p className="text-xs font-bold text-gray-800 mt-1.5 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#ed1c24]" />
+                              <span>{store.distanceKm.toFixed(2)} kilometer</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-2.5 mt-3 pt-3 border-t border-gray-100 text-xs">
-                          <div className="flex items-center gap-3">
-                            {store.whatsapp && (
-                              <a
-                                href={`https://wa.me/${store.whatsapp}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[#25D366] hover:opacity-80 font-bold"
-                              >
-                                <WhatsAppIcon />
-                                <span>WhatsApp</span>
-                              </a>
-                            )}
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 mt-3 pt-3 border-t border-gray-100 text-xs">
+                        <div className="flex items-center gap-3.5">
+                          {store.whatsapp && (
                             <a
-                              href={`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`}
+                              href={`https://wa.me/${store.whatsapp}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-gray-700 hover:text-black"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-[#25D366] hover:opacity-80 font-bold"
                             >
-                              <Navigation size={12} className="text-gray-500" />
-                              <span>{isAr ? "الاتجاهات" : "Directions"}</span>
+                              <WhatsAppIcon />
+                              <span>WhatsApp</span>
                             </a>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedStoreId(store.id)}
-                              className="inline-flex items-center gap-1 text-gray-700 hover:text-[#ed1c24] cursor-pointer"
-                            >
-                              <MapPin size={12} className="text-gray-500" />
-                              <span>{isAr ? "عرض على الخريطة" : "See on Map"}</span>
-                            </button>
-                          </div>
+                          )}
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-gray-700 hover:text-black font-medium"
+                          >
+                            <Navigation size={12} className="text-gray-500" />
+                            <span>{isAr ? "الاتجاهات" : "Directions"}</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStoreId(store.id);
+                            }}
+                            className="inline-flex items-center gap-1 text-gray-500 hover:text-[#ed1c24] cursor-pointer"
+                          >
+                            <span>{isAr ? "عرض على الخريطة" : "See on Map"}</span>
+                          </button>
                         </div>
+
+                        {/* <Link
+                          href={`/${locale}/storelocator`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="bg-[#ed1c24] hover:bg-[#c6181d] text-white font-bold text-xs px-4 py-2 rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer rtl:mr-auto ltr:ml-auto"
+                        >
+                          <span>{isAr ? "احجز المركز" : "Book Installer"}</span>
+                          <span className="text-xs">→</span>
+                        </Link> */}
                       </div>
                     </div>
                   </div>

@@ -381,9 +381,9 @@ export default function EvTyresLanding() {
                 {/* Solid Red Shop Button */}
                 <Link
                   href={t.link}
-                  className="w-full bg-[#d62828] hover:bg-black text-white text-xs font-black uppercase tracking-wider py-2.5 px-4 text-center transition-colors block"
+                  className="btn-cta w-full text-xs py-2.5 px-4"
                 >
-                  {t.buttonLabel}
+                  <span>{t.buttonLabel}</span>
                 </Link>
               </div>
             ))}
@@ -393,9 +393,9 @@ export default function EvTyresLanding() {
           <div className="text-center">
             <Link
               href={`/${locale}/tyres?ev_tyre=EV`}
-              className="inline-block bg-black hover:bg-[#ed1c24] text-white text-xs font-bold px-7 py-2.5 rounded-full transition-colors shadow-xs"
+              className="btn-cta text-xs font-bold px-7 py-2.5 rounded-full shadow-xs"
             >
-              {isAr ? "تصفح جميع إطارات EV" : "Browse All EV Tyres"}
+              <span>{isAr ? "تصفح جميع إطارات EV" : "Browse All EV Tyres"}</span>
             </Link>
           </div>
         </div>
@@ -460,9 +460,9 @@ export default function EvTyresLanding() {
                 {/* Solid Red Explore Button */}
                 <Link
                   href={car.link}
-                  className="w-full bg-[#d62828] hover:bg-black text-white text-xs font-black uppercase tracking-wider py-2.5 px-4 text-center transition-colors block"
+                  className="btn-cta w-full text-xs py-2.5 px-4"
                 >
-                  {car.buttonLabel}
+                  <span>{car.buttonLabel}</span>
                 </Link>
               </div>
             ))}
@@ -472,9 +472,9 @@ export default function EvTyresLanding() {
           <div className="text-center">
             <Link
               href={`/${locale}/tyres/cars`}
-              className="inline-block bg-black hover:bg-[#ed1c24] text-white text-xs font-bold px-7 py-2.5 rounded-full transition-colors shadow-xs"
+              className="btn-cta text-xs font-bold px-7 py-2.5 rounded-full shadow-xs"
             >
-              {isAr ? "تصفح جميع موديلات السيارات" : "Browse All Car Models"}
+              <span>{isAr ? "تصفح جميع موديلات السيارات" : "Browse All Car Models"}</span>
             </Link>
           </div>
         </div>

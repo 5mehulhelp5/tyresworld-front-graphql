@@ -28,8 +28,21 @@ function localizedHref(url: string | undefined, locale: string): string {
   return `/${locale}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
-export default function Footer() {
+export default function Footer({ forceShow }: { forceShow?: boolean } = {}) {
   const pathname = usePathname();
+  const isCheckoutSuccess =
+    pathname?.includes("/checkout/complete") ||
+    pathname?.includes("/checkout/success") ||
+    pathname?.includes("/onepage/success");
+
+  const isCheckout =
+    !forceShow &&
+    !isCheckoutSuccess &&
+    (pathname === "/checkout" ||
+      pathname === "/ar/checkout" ||
+      pathname === "/en/checkout" ||
+      pathname === "/checkout/" ||
+      pathname?.endsWith("/checkout"));
   const locale = pathname?.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
 
@@ -40,15 +53,17 @@ export default function Footer() {
 
   /* Reveal the back-to-top control once the user has scrolled a screenful. */
   useEffect(() => {
+    if (isCheckout) return;
     const onScroll = () => setShowTop(window.scrollY > 600);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [isCheckout]);
 
   /* Real footer content (link columns, contact details, social links) from
      Magento's kleverFooter (Klever module) — 100% from API. */
   useEffect(() => {
+    if (isCheckout) return;
     let active = true;
     fetch(`/api/footer?locale=${locale}`)
       .then((res) => res.json())
@@ -58,17 +73,23 @@ export default function Footer() {
         setColumns(
           (footer?.columns ?? [])
             .filter((c: { title?: string | null }) => c?.title)
-            .map((c: { title: string; links?: { label?: string | null; url?: string | null }[] }) => ({
+            .map((c: { title: string; links?: Array<{ label?: string | null; url?: string | null }> }) => ({
               title: c.title,
-              links: (c.links ?? []).filter((l) => l.label && l.url) as FooterLink[],
-            })),
+              links: (c.links ?? [])
+                .filter((l) => l && l.label && l.url)
+                .map((l) => ({ label: l.label!, url: l.url! })),
+            }))
         );
         setContact(footer?.contact ?? null);
-        setSocial((footer?.social ?? []).filter((s: FooterSocial) => s?.platform && s?.url));
+        setSocial((footer?.social ?? footer?.social_links ?? []).filter((s: FooterSocial) => s && s.platform && s.url));
       })
       .catch(() => { /* footer chrome only — page still renders without it */ });
     return () => { active = false; };
-  }, [locale]);
+  }, [locale, isCheckout]);
+
+  if (isCheckout) {
+    return null;
+  }
 
   return (
     <footer className="section site-footer page-footer bg-[#121011] text-[#a0a0a0] pt-9 sm:pt-11 pb-0 relative">

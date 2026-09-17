@@ -163,6 +163,11 @@ export default function CartPage() {
   const subtotalExclTax = cart?.prices?.subtotal_excluding_tax?.value ?? subtotal;
   const vatAmount = taxFromApi;
   const additionalCharge = shippingAmount;
+  // Real tax label from Magento, plus a rate derived from two real API
+  // numbers (Magento's cart-level tax item carries no rate field of its
+  // own) — never a hardcoded assumed percentage.
+  const vatRatePct = subtotalExclTax > 0 ? Math.round((vatAmount / subtotalExclTax) * 100) : null;
+  const vatLabel = appliedTaxes[0]?.label || "Tax";
 
   const fmt = (v: number) => <Money value={v} currency={currency} digits={2} />;
 
@@ -355,10 +360,12 @@ export default function CartPage() {
                 const productUrl = `/${locale}/product/${item.product.url_key ?? item.product.sku}`;
                 const unitPrice =
                   item.prices.price_including_tax?.value ??
-                  (item.prices.price?.value != null ? Number((item.prices.price.value * 1.05).toFixed(2)) : 0);
+                  item.prices.price?.value ??
+                  0;
                 const rowTotal =
                   item.prices.row_total_including_tax?.value ??
-                  (item.prices.row_total?.value != null ? Number((item.prices.row_total.value * 1.05).toFixed(2)) : 0);
+                  item.prices.row_total?.value ??
+                  0;
 
                 return (
                   /* ── Desktop: same 4-col grid as header ── */
@@ -493,7 +500,7 @@ export default function CartPage() {
               {isAr ? "ملخص الطلب" : "Order Summary"}
             </h2>
 
-            {/* Price Rows (Exact store fields: Subtotal, Additional Charge, VAT (5%), Order Total) */}
+            {/* Price Rows (Exact store fields: Subtotal, Additional Charge, VAT, Order Total) */}
             <div className="space-y-3.5">
               {/* Subtotal */}
               <div className="flex justify-between items-center text-sm text-gray-600 font-medium">
@@ -511,9 +518,9 @@ export default function CartPage() {
                 </span>
               </div>
 
-              {/* VAT (5%) */}
+              {/* VAT */}
               <div className="flex justify-between items-center text-sm text-gray-600 font-medium">
-                <span>{isAr ? "ضريبة القيمة المضافة (5%)" : "VAT (5%)"}</span>
+                <span>{vatLabel}{vatRatePct != null ? ` (${vatRatePct}%)` : ""}</span>
                 <span className="font-bold text-gray-950 tabular-nums text-base">
                   {fmt(vatAmount)}
                 </span>

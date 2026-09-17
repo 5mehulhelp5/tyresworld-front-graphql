@@ -87,9 +87,9 @@ export default function RequestCallback() {
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="bg-[#0e0e0e] hover:bg-black text-white text-[11px] sm:text-xs font-bold uppercase tracking-wider px-7 sm:px-9 py-3.5 rounded-lg transition-all duration-200 shadow-md hover:scale-105 active:scale-95 cursor-pointer border border-white/5"
+                className="btn-cta text-[11px] sm:text-xs px-7 sm:px-9 py-3.5 rounded-lg shadow-md hover:scale-105 active:scale-95 duration-200 border border-white/5"
               >
-                REQUEST A CALLBACK
+                <span>REQUEST A CALLBACK</span>
               </button>
             </div>
           </div>

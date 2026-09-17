@@ -6,7 +6,6 @@ import Footer from "@/components/layout/Footer";
 import FloatingContact from "@/components/FloatingContact";
 import { CartProvider } from "@/lib/cart-context";
 import { AuthProvider } from "@/lib/auth-context";
-import { CompareProvider } from "@/lib/compare-context";
 import { WishlistProvider } from "@/lib/wishlist-context";
 import CartAuthSync from "@/components/CartAuthSync";
 import LocaleDirectionSetter from "@/components/LocaleDirectionSetter";
@@ -99,17 +98,15 @@ export default async function RootLayout({
         <StoreConfigProvider value={storeConfig}>
           <AuthProvider>
             <CartProvider>
-              <CompareProvider>
-                <WishlistProvider>
-                  <CartAuthSync />
-                  <Suspense fallback={null}>
-                    <Header menu={mainMenu} />
-                  </Suspense>
-                  <main>{children}</main>
-                  <Footer />
-                  <FloatingContact />
-                </WishlistProvider>
-              </CompareProvider>
+              <WishlistProvider>
+                <CartAuthSync />
+                <Suspense fallback={null}>
+                  <Header menu={mainMenu} />
+                </Suspense>
+                <main>{children}</main>
+                <Footer />
+                <FloatingContact />
+              </WishlistProvider>
             </CartProvider>
           </AuthProvider>
         </StoreConfigProvider>

@@ -356,7 +356,7 @@ export default async function DynamicSlugPage({ params }: PageProps) {
                 scoped so none of it can leak into or collide with the rest
                 of the site's own styling. */}
             {isBrokenTemplateError ? (
-              <div className="container py-10 lg:py-14">
+              <div className="container py-2 lg:py-6">
                 <div className="max-w-xl mx-auto text-center py-10 text-gray-500">
                   <p className="font-bold text-gray-900 mb-2">This page's content isn't available right now.</p>
                   <p className="text-sm">
@@ -375,7 +375,7 @@ export default async function DynamicSlugPage({ params }: PageProps) {
             {(slug.includes("service") || slug.includes("tyre") || slug.includes("tire")) && (
               <TyreGuideSeoContent locale={locale} />
             )}
-            <div className="container py-10 lg:py-14">
+            <div className="container py-2 lg:py-6">
               <CmsCarousel />
               <CmsAccordion />
             </div>

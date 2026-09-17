@@ -3,20 +3,8 @@
 import { useEffect } from "react";
 
 /**
- * Minimal behaviour for the Bootstrap-carousel markup that shows up in
- * Magento Page Builder CMS content (e.g. the testimonial slider on
- * car-tyre-service and similar service pages). The project ships no
- * Bootstrap JS, so `data-bs-*` attributes on that markup are otherwise
- * inert — indicator dots don't switch slides and nothing auto-rotates.
- *
- * This wires up exactly the two behaviors that markup expects:
- *   - clicking a `[data-bs-slide-to]` button activates the matching
- *     `.carousel-item` (by index) and its own indicator button
- *   - each `.carousel` auto-advances on its own `data-bs-interval`
- *
- * Scoped to `.cms-content` so it only ever touches CMS-authored
- * carousels, never an unrelated component that happens to reuse
- * Bootstrap's class names.
+ * Robust, zero-layout-shift behavior for CMS Page Builder carousels
+ * (e.g. the testimonial slider on car-tyre-service and service pages).
  */
 export default function CmsCarousel() {
   useEffect(() => {
@@ -31,7 +19,9 @@ export default function CmsCarousel() {
       if (!items.length) return;
 
       const activate = (index: number) => {
-        items.forEach((item, i) => item.classList.toggle("active", i === index));
+        items.forEach((item, i) => {
+          item.classList.toggle("active", i === index);
+        });
         indicators.forEach((btn) => {
           const target = Number(btn.getAttribute("data-bs-slide-to"));
           btn.classList.toggle("active", target === index);
@@ -43,9 +33,31 @@ export default function CmsCarousel() {
         items.findIndex((item) => item.classList.contains("active")),
       );
 
-      const clickHandlers: { btn: HTMLButtonElement; handler: () => void }[] = [];
+      const nextSlide = (e?: Event) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        current = (current + 1) % items.length;
+        activate(current);
+      };
+
+      const prevSlide = (e?: Event) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        current = (current - 1 + items.length) % items.length;
+        activate(current);
+      };
+
+      const clickHandlers: { btn: HTMLElement; handler: (e: MouseEvent) => void }[] = [];
+
+      // Wire existing indicators
       indicators.forEach((btn) => {
-        const handler = () => {
+        const handler = (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
           current = Number(btn.getAttribute("data-bs-slide-to")) || 0;
           activate(current);
         };
@@ -53,14 +65,70 @@ export default function CmsCarousel() {
         clickHandlers.push({ btn, handler });
       });
 
-      const interval = Number(carousel.getAttribute("data-bs-interval")) || 5000;
-      const timer = window.setInterval(() => {
-        current = (current + 1) % items.length;
-        activate(current);
-      }, interval);
+      // Wire existing controls if present
+      const prevControls = Array.from(
+        carousel.querySelectorAll<HTMLElement>("[data-bs-slide='prev'], .carousel-control-prev"),
+      );
+      const nextControls = Array.from(
+        carousel.querySelectorAll<HTMLElement>("[data-bs-slide='next'], .carousel-control-next"),
+      );
+
+      prevControls.forEach((btn) => {
+        btn.addEventListener("click", prevSlide);
+        clickHandlers.push({ btn, handler: prevSlide });
+      });
+      nextControls.forEach((btn) => {
+        btn.addEventListener("click", nextSlide);
+        clickHandlers.push({ btn, handler: nextSlide });
+      });
+
+      // If no arrow buttons exist and there are multiple slides, inject sleek prev/next buttons
+      if (items.length > 1 && !prevControls.length && !nextControls.length) {
+        const arrowWrapper = document.createElement("div");
+        arrowWrapper.className = "cms-carousel-arrows";
+        arrowWrapper.innerHTML = `
+          <button type="button" class="cms-carousel-btn cms-carousel-prev" aria-label="Previous slide">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button type="button" class="cms-carousel-btn cms-carousel-next" aria-label="Next slide">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        `;
+
+        carousel.appendChild(arrowWrapper);
+        const prevBtn = arrowWrapper.querySelector<HTMLButtonElement>(".cms-carousel-prev");
+        const nextBtn = arrowWrapper.querySelector<HTMLButtonElement>(".cms-carousel-next");
+
+        if (prevBtn) {
+          prevBtn.addEventListener("click", prevSlide);
+          clickHandlers.push({ btn: prevBtn, handler: prevSlide });
+        }
+        if (nextBtn) {
+          nextBtn.addEventListener("click", nextSlide);
+          clickHandlers.push({ btn: nextBtn, handler: nextSlide });
+        }
+
+        cleanups.push(() => {
+          arrowWrapper.remove();
+        });
+      }
+
+      const interval = Number(carousel.getAttribute("data-bs-interval")) || 6000;
+      let timer = window.setInterval(nextSlide, interval);
+
+      const pauseAuto = () => window.clearInterval(timer);
+      const resumeAuto = () => {
+        window.clearInterval(timer);
+        timer = window.setInterval(nextSlide, interval);
+      };
+
+      carousel.addEventListener("mouseenter", pauseAuto);
+      carousel.addEventListener("mouseleave", resumeAuto);
 
       cleanups.push(() => {
         window.clearInterval(timer);
+        carousel.removeEventListener("mouseenter", pauseAuto);
+        carousel.removeEventListener("mouseleave", resumeAuto);
         clickHandlers.forEach(({ btn, handler }) => btn.removeEventListener("click", handler));
       });
     });

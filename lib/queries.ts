@@ -103,6 +103,8 @@ export const CUSTOMER_ORDER_DETAIL_QUERY = /* GraphQL */ `
           number
           order_date
           status
+          shipping_method
+          carrier
           total {
             grand_total      { value currency }
             subtotal         { value currency }

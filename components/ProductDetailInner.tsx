@@ -1472,17 +1472,17 @@ function ShareModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded border border-gray-300 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-colors"
+              className="px-5 py-2.5 rounded text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-6 py-2.5 rounded bg-black hover:bg-[#ed1c24] text-white text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              className="btn-cta px-6 py-2.5 rounded text-xs gap-1.5"
             >
               {submitting && <Loader2 size={13} className="animate-spin" />}
-              {submitting ? "Sending..." : "Send Email"}
+              <span>{submitting ? "Sending..." : "Send Email"}</span>
             </button>
           </div>
         </form>

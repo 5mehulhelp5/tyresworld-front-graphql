@@ -464,72 +464,169 @@ html {
     @apply relative z-10;
   }
 
-  /* ── Black Base Button with Brand Red Slide-Up from Bottom ── */
+  /* ═════════════════════════════════════════════════════════════════
+     GLOBAL SWEEP-UP HOVER ANIMATION FOR ALL BUTTONS
+     Wipes from bottom to top on hover with 100% sharp text visibility
+     ═════════════════════════════════════════════════════════════════ */
+
+  /* ── 1. Base Structure for all interactive buttons ── */
   .btn-slide-black,
-  .btn-black-slide {
-    @apply relative inline-flex items-center justify-center overflow-hidden
-           font-black uppercase tracking-wider text-white transition-colors cursor-pointer;
-    background: var(--brand-ink, #000000);
-    border-radius: var(--radius-sm, 6px);
+  .btn-black-slide,
+  .btn-slide-red,
+  .btn-red-slide,
+  .btn-sweep,
+  .btn-sweep-black,
+  .btn-sweep-red,
+  .btn-sweep-light,
+  .btn-cta,
+  .btn-tocart,
+  .btn-enquiry,
+  .button-primary,
+  .button-secondary {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transition: color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Ensure text and icons ALWAYS stay on top of the sweep background */
+  .btn-slide-black > *,
+  .btn-black-slide > *,
+  .btn-slide-red > *,
+  .btn-red-slide > *,
+  .btn-sweep > *,
+  .btn-sweep-black > *,
+  .btn-sweep-red > *,
+  .btn-sweep-light > *,
+  .btn-cta > *,
+  .btn-tocart > *,
+  .btn-enquiry > *,
+  .button-primary > *,
+  .button-secondary > * {
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ── 2. Black Buttons -> Red Sweep-Up from Bottom ── */
+  .btn-slide-black,
+  .btn-black-slide,
+  .btn-sweep-black {
+    background-color: var(--brand-ink, #000000);
+    color: #ffffff;
   }
 
   .btn-slide-black::before,
-  .btn-black-slide::before {
+  .btn-black-slide::before,
+  .btn-sweep-black::before {
     content: "";
-    @apply absolute inset-0 z-0 pointer-events-none;
-    background: var(--brand-red, #ed1c24);
+    position: absolute;
+    inset: 0;
+    background-color: #ed1c24;
     transform: scaleY(0);
     transform-origin: bottom center;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+    pointer-events: none;
   }
 
   .btn-slide-black:hover::before,
-  .btn-black-slide:hover::before {
+  .btn-black-slide:hover::before,
+  .btn-sweep-black:hover::before {
     transform: scaleY(1);
   }
 
-  .btn-slide-black > *,
-  .btn-black-slide > * {
-    @apply relative z-10;
+  .btn-slide-black:hover,
+  .btn-black-slide:hover,
+  .btn-sweep-black:hover {
+    color: #ffffff !important;
   }
 
-  .btn-slide-black:disabled::before,
-  .btn-black-slide:disabled::before {
-    transform: scaleY(0);
-  }
-
-  /* ── Red Base Button with Ink/Black Slide-Up from Bottom ── */
+  /* ── 3. Red Buttons -> Black Sweep-Up from Bottom ── */
   .btn-slide-red,
-  .btn-red-slide {
-    @apply relative inline-flex items-center justify-center overflow-hidden
-           font-black uppercase tracking-wider text-white transition-colors cursor-pointer;
-    background: var(--brand-red, #ed1c24);
-    border-radius: var(--radius-sm, 6px);
+  .btn-red-slide,
+  .btn-sweep-red,
+  .btn-cta,
+  .btn-tocart,
+  .btn-enquiry,
+  .button-primary {
+    background-color: #ed1c24;
+    color: #ffffff;
   }
 
   .btn-slide-red::before,
-  .btn-red-slide::before {
+  .btn-red-slide::before,
+  .btn-sweep-red::before,
+  .btn-cta::before,
+  .btn-tocart::before,
+  .btn-enquiry::before,
+  .button-primary::before {
     content: "";
-    @apply absolute inset-0 z-0 pointer-events-none;
-    background: var(--brand-ink, #000000);
+    position: absolute;
+    inset: 0;
+    background-color: #000000;
     transform: scaleY(0);
     transform-origin: bottom center;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+    pointer-events: none;
   }
 
   .btn-slide-red:hover::before,
-  .btn-red-slide:hover::before {
+  .btn-red-slide:hover::before,
+  .btn-sweep-red:hover::before,
+  .btn-cta:hover::before,
+  .btn-tocart:hover::before,
+  .btn-enquiry:hover::before,
+  .button-primary:hover::before {
     transform: scaleY(1);
   }
 
-  .btn-slide-red > *,
-  .btn-red-slide > * {
-    @apply relative z-10;
+  .btn-slide-red:hover,
+  .btn-red-slide:hover,
+  .btn-sweep-red:hover,
+  .btn-cta:hover,
+  .btn-tocart:hover,
+  .btn-enquiry:hover,
+  .button-primary:hover {
+    color: #ffffff !important;
   }
 
-  .btn-slide-red:disabled::before,
-  .btn-red-slide:disabled::before {
+  /* ── 4. Light / Gray / Outline Buttons (View Order, Reorder, Edit, etc.) -> Red Sweep-Up from Bottom ── */
+  .btn-sweep-light,
+  .button-secondary {
+    color: #374151;
+  }
+
+  .btn-sweep-light::before,
+  .button-secondary::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: #ed1c24;
     transform: scaleY(0);
+    transform-origin: bottom center;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .btn-sweep-light:hover::before,
+  .button-secondary:hover::before {
+    transform: scaleY(1);
+  }
+
+  .btn-sweep-light:hover,
+  .button-secondary:hover {
+    color: #ffffff !important;
+  }
+
+  button:disabled::before,
+  a:disabled::before,
+  .disabled::before {
+    transform: scaleY(0) !important;
   }
 
   /* ═════════════════════════════════════════════════════════════════
@@ -1765,7 +1862,7 @@ html {
 
   /* ── Mobile drawer (Asphalt surface) ────────────────────────────── */
   .drawer-panel {
-    @apply absolute top-0 bottom-0 w-[320px] max-w-full flex flex-col;
+    @apply fixed top-0 bottom-0 w-[320px] max-w-[85vw] flex flex-col;
     background: var(--brand-asphalt);
   }
 
@@ -2566,22 +2663,30 @@ html[lang="ar"] .tab-content {
 }
 
 .cms-content .section-padding {
-  padding-top: 2.5rem;
-  padding-bottom: 2.5rem;
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
 }
 
-.cms-content .container,
+.cms-content .container {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
 .cms-content .container-fluid {
   width: 100%;
+  padding-inline: 1rem;
 }
 
 .cms-content .container.custom-width {
-  max-width: 56rem;
+  max-width: 1240px;
   margin-inline: auto;
+  padding-inline: 1rem;
 }
 
 .cms-content .section-title {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .cms-content .section-title.text-center,
@@ -2590,12 +2695,16 @@ html[lang="ar"] .tab-content {
 }
 
 .cms-content .section-title h2 {
-  font-size: clamp(22px, 3vw, 34px);
+  font-size: clamp(20px, 2.5vw, 30px);
+  margin-bottom: 0.35rem;
 }
 
 .cms-content .section-title p {
   color: #6b7280;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
+  max-width: 800px;
+  margin-inline: auto;
+  margin-bottom: 0;
   text-transform: none;
 }
 
@@ -2818,57 +2927,282 @@ html[lang="ar"] .tab-content {
   height: auto;
 }
 
-/* Benefit cards ("Why Choose TyresWorld") & Offer boxes */
-.cms-content .what-we-offer .offer-content .offer-box {
-  border: 1px solid var(--brand-red, #ed1c24);
-  padding: 25px;
-  transition: all 0.3s ease-in-out;
+/* "What We Offer" / Expert Car Services Grid & Boxes */
+.cms-content .what-we-offer {
+  padding: 4rem 0;
+  background-color: #ffffff;
+}
+
+.cms-content .what-we-offer .offer-content .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.cms-content .what-we-offer .offer-content .row > [class*="col-"] {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .cms-content .what-we-offer .offer-content .row > [class*="col-"] {
+    flex: 0 0 calc(33.333% - 1rem) !important;
+    max-width: calc(33.333% - 1rem) !important;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .cms-content .what-we-offer .offer-content .row > [class*="col-"] {
+    flex: 0 0 calc(50% - 0.75rem) !important;
+    max-width: calc(50% - 0.75rem) !important;
+  }
+}
+
+@media (max-width: 639.98px) {
+  .cms-content .what-we-offer .offer-content .row > [class*="col-"] {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+.cms-content .what-we-offer .offer-content .offer-box,
+.cms-content .offer-box {
+  background: #ffffff;
+  border: 1.5px solid var(--brand-red, #ed1c24);
+  border-radius: 1.25rem;
+  padding: 2.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-height: 270px;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
   position: relative;
-  min-height: 260px;
-  background-color: #fff;
 }
 
-.cms-content .what-we-offer .offer-content .offer-box h4 {
-  margin-bottom: 15px;
-  font-weight: 700;
-  font-size: 1.125rem;
+.cms-content .what-we-offer .offer-content .offer-box:hover,
+.cms-content .offer-box:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 32px -8px rgba(237, 28, 36, 0.2);
 }
 
-.cms-content .what-we-offer .offer-content .offer-box .box-bottom {
+.cms-content .what-we-offer .offer-content .offer-box h4,
+.cms-content .offer-box h4 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #111827;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.875rem;
+  line-height: 1.35;
+}
+
+.cms-content .what-we-offer .offer-content .offer-box p,
+.cms-content .offer-box p {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #4b5563;
+  margin-bottom: 1.75rem;
+  flex: 1;
+}
+
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom,
+.cms-content .offer-box .box-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 20px;
+  margin-top: auto;
+  padding-top: 0.75rem;
 }
 
-.cms-content .what-we-offer .offer-content .offer-box .box-bottom .icon span svg {
-  height: 40px;
-  width: 40px;
-  fill: var(--brand-red, #ed1c24);
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom .icon,
+.cms-content .offer-box .icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  color: #ed1c24;
+  transition: all 0.3s ease;
 }
 
-.cms-content .what-we-offer .offer-content .offer-box .box-bottom .action-btn a {
+.cms-content .what-we-offer .offer-content .offer-box:hover .box-bottom .icon,
+.cms-content .offer-box:hover .icon {
+  transform: scale(1.1);
+}
+
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom .icon svg,
+.cms-content .offer-box .icon svg {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+}
+
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom .action-btn a,
+.cms-content .offer-box .action-btn a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   text-transform: uppercase;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-red, #ed1c24);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #ed1c24;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom .action-btn a:hover,
+.cms-content .offer-box .action-btn a:hover {
+  transform: translateX(4px);
+  color: #b91c1c;
+}
+
+.cms-content .what-we-offer .offer-content .offer-box .box-bottom .action-btn svg,
+.cms-content .offer-box .action-btn svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: currentColor;
+}
+
+.cms-content .section.bg-light {
+  background-color: #f9fafb;
+  padding: 2.25rem 0;
+  width: 100%;
+}
+
+.cms-content .section.bg-light .container,
+.cms-content .section.bg-light .container.custom-width {
+  max-width: 1100px;
+}
+
+.cms-content .section.bg-light .row,
+.cms-content .row.g-4.justify-content-center {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+  max-width: 1060px;
+  margin-inline: auto;
+}
+
+.cms-content .section.bg-light .row > [class*="col-"],
+.cms-content .row.g-4.justify-content-center > [class*="col-"] {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Benefits / Feature Cards Dynamic Responsive Distribution:
+   - 4-card rows (e.g. Abu Dhabi Tyre Service page): EXACTLY 4 cards in 1 line across desktop (>= 1024px)
+   - 5-card rows (e.g. Carolyn Auto Care page): EXACTLY 3 on row 1 + 2 centered on row 2 on desktop/tablets (>= 768px)
+   - Tablet (768px - 1023px): 2x2 grid for 4-card rows
+   - Mobile (< 768px): clean full-width cards (100%) */
+
+/* 5-card rows specifically: 3 on row 1 and 2 centered on row 2 for viewports >= 768px */
+@media (min-width: 768px) {
+  .cms-content .section.bg-light .row:has(> :nth-child(5):last-child),
+  .cms-content .row.g-4:has(> :nth-child(5):last-child) {
+    max-width: 960px;
+  }
+
+  .cms-content .section.bg-light .row:has(> :nth-child(5):last-child) > .col-lg-3,
+  .cms-content .section.bg-light .row:has(> :nth-child(5):last-child) > [class*="col-"],
+  .cms-content .row.g-4:has(> :nth-child(5):last-child) > .col-lg-3,
+  .cms-content .row.g-4:has(> :nth-child(5):last-child) > [class*="col-"] {
+    flex: 0 0 calc(33.3333% - 0.7rem) !important;
+    max-width: calc(33.3333% - 0.7rem) !important;
+    width: calc(33.3333% - 0.7rem) !important;
+  }
+}
+
+/* 4-card rows on desktop (>= 1024px): 4 cards in 1 single row filling full container width */
+@media (min-width: 1024px) {
+  .cms-content .section.bg-light .row > .col-lg-3,
+  .cms-content .section.bg-light .row.g-4.justify-content-center > .col-lg-3,
+  .cms-content .choose-us .row > .col-lg-3,
+  .cms-content .section.bg-light .row:has(> :nth-child(4):last-child) > .col-lg-3,
+  .cms-content .section.bg-light .row:has(> :nth-child(4):last-child) > [class*="col-"],
+  .cms-content .row.g-4:has(> :nth-child(4):last-child) > .col-lg-3,
+  .cms-content .row.g-4:has(> :nth-child(4):last-child) > [class*="col-"] {
+    flex: 0 0 calc(25% - 0.75rem) !important;
+    max-width: calc(25% - 0.75rem) !important;
+    width: calc(25% - 0.75rem) !important;
+  }
+}
+
+/* 4-card rows on tablet (768px - 1023.98px): 2x2 grid */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .cms-content .section.bg-light .row:has(> :nth-child(4):last-child) > .col-lg-3,
+  .cms-content .section.bg-light .row:has(> :nth-child(4):last-child) > [class*="col-"],
+  .cms-content .row.g-4:has(> :nth-child(4):last-child) > .col-lg-3,
+  .cms-content .row.g-4:has(> :nth-child(4):last-child) > [class*="col-"] {
+    flex: 0 0 calc(50% - 0.5rem) !important;
+    max-width: calc(50% - 0.5rem) !important;
+    width: calc(50% - 0.5rem) !important;
+  }
+}
+
+/* Mobile (< 768px): 100% full-width */
+@media (max-width: 767.98px) {
+  .cms-content .section.bg-light .row > [class*="col-"],
+  .cms-content .section.bg-light .row.g-4.justify-content-center > [class*="col-"],
+  .cms-content .section.bg-light .row > .col-lg-3,
+  .cms-content .choose-us .row > [class*="col-"],
+  .cms-content .row.g-4.justify-content-center > .col-lg-3 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
 }
 
 .cms-content .card {
-  background: #fff;
-  border-radius: var(--radius-card);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+}
+
+.cms-content .card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 22px -4px rgba(237, 28, 36, 0.08);
+  border-color: #fca5a5;
 }
 
 .cms-content .card.shadow-sm {
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04);
 }
 
-.cms-content .card-body {
-  padding: 1.5rem;
+.cms-content .card-body,
+.cms-content .card .p-4 {
+  padding: 1.25rem 1rem !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+}
+
+.cms-content .section.bg-light p.mt-4,
+.cms-content .section.bg-light .mt-4 {
+  margin-top: 1.25rem !important;
+  max-width: 820px;
+  margin-inline: auto;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #4b5563;
 }
 
 .cms-content .rounded-circle {
@@ -2909,18 +3243,18 @@ html[lang="ar"] .tab-content {
 }
 
 .cms-content .p-4 {
-  padding: 1.5rem;
+  padding: 1.25rem;
 }
 
 .cms-content .mb-0 { margin-bottom: 0; }
 .cms-content .mb-1 { margin-bottom: 0.25rem; }
-.cms-content .mb-2 { margin-bottom: 0.5rem; }
-.cms-content .mb-3 { margin-bottom: 0.75rem; }
-.cms-content .mb-4 { margin-bottom: 1rem; }
-.cms-content .mb-5 { margin-bottom: 2rem; }
+.cms-content .mb-2 { margin-bottom: 0.35rem; }
+.cms-content .mb-3 { margin-bottom: 0.5rem; }
+.cms-content .mb-4 { margin-bottom: 0.85rem; }
+.cms-content .mb-5 { margin-bottom: 1.25rem; }
 .cms-content .mt-2 { margin-top: 0.5rem; }
 .cms-content .mt-auto { margin-top: auto; }
-.cms-content .mt-40 { margin-top: 2.5rem; }
+.cms-content .mt-40 { margin-top: 1.5rem; }
 
 .cms-content .fw-bold {
   font-weight: 700;
@@ -2940,21 +3274,58 @@ html[lang="ar"] .tab-content {
 }
 
 .cms-content .lh-lg {
-  line-height: 1.8;
+  line-height: 1.55;
 }
 
-.cms-content .h6 {
-  font-size: 1rem;
-  font-weight: 700;
+.cms-content .h6,
+.cms-content .card h3.h6,
+.cms-content .card .h6 {
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  color: #111827;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.35rem !important;
+  line-height: 1.35;
+}
+
+.cms-content .card p.small,
+.cms-content .card p {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+  color: #4b5563 !important;
+  margin-bottom: 0 !important;
 }
 
 /* Icon badge — the circular "theme_color" icon above each benefit/offer
-   card title. Icons use stroke="currentColor" / fill="currentColor" in
-   the source SVG, so colouring the badge text colour is enough. */
-.cms-content .rounded-circle.theme_color {
-  color: var(--brand-red);
-  width: 3.5rem;
-  height: 3.5rem;
+   card title. */
+.cms-content .rounded-circle.theme_color,
+.cms-content .card .rounded-circle {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  background-color: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ed1c24;
+  margin-bottom: 0.65rem !important;
+  transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+.cms-content .rounded-circle.theme_color svg,
+.cms-content .card .rounded-circle svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.cms-content .card:hover .rounded-circle {
+  transform: scale(1.08);
+  background-color: #ed1c24;
+  color: #ffffff;
 }
 
 /* "What We Offer" boxes */
@@ -3014,13 +3385,203 @@ html[lang="ar"] .tab-content {
 }
 
 /* Testimonial carousel — behaviour wired up by <CmsCarousel> (rendered
-   alongside .cms-content), this is just the visual state it toggles. */
+/* Testimonial carousel — CSS Grid stacking locks height to the tallest slide permanently so no layout shift occurs */
+.cms-content .carousel-inner,
+.cms-content .carousel .carousel-inner {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: 1fr !important;
+  position: relative !important;
+  width: 100% !important;
+  align-items: stretch !important;
+  min-height: 320px;
+}
+
 .cms-content .carousel-item {
-  display: none;
+  grid-area: 1 / 1 / 2 / 2 !important;
+  display: block !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transform: scale(0.99) !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .cms-content .carousel-item.active {
-  display: block;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: scale(1) !important;
+  z-index: 2 !important;
+}
+
+/* Testimonials Carousel Grid & Columns */
+.cms-content .carousel .carousel-item .row,
+.cms-content .carousel-item .row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: stretch !important;
+  gap: 1.5rem !important;
+  margin: 0 !important;
+  height: 100% !important;
+}
+
+@media (min-width: 768px) {
+  .cms-content .carousel .carousel-item .row > [class*="col-"],
+  .cms-content .carousel-item .row > [class*="col-"],
+  .cms-content .carousel-item .col-md-6,
+  .cms-content .carousel-item .col-lg-6 {
+    flex: 0 0 calc(50% - 0.75rem) !important;
+    max-width: calc(50% - 0.75rem) !important;
+    width: calc(50% - 0.75rem) !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .cms-content .carousel .carousel-item .row > [class*="col-"],
+  .cms-content .carousel-item .row > [class*="col-"] {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+}
+
+/* Testimonial Card Styling */
+.cms-content .carousel-item .border.rounded-3,
+.cms-content .carousel-item .border,
+.cms-content .carousel-item [style*="min-height: 280px"],
+.cms-content .carousel-item .card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 1.25rem !important;
+  padding: 2.25rem 2rem !important;
+  height: 100% !important;
+  min-height: 330px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+
+.cms-content .carousel-item .border.rounded-3:hover,
+.cms-content .carousel-item .border:hover,
+.cms-content .carousel-item .card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08);
+  border-color: #fca5a5 !important;
+}
+
+.cms-content .carousel-item p {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: #4b5563;
+  margin-bottom: 1.5rem;
+  flex: 1;
+}
+
+.cms-content .carousel-item .d-flex.align-items-center {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 1rem !important;
+  margin-top: auto !important;
+  flex-wrap: nowrap !important;
+}
+
+.cms-content .carousel-item .d-flex.align-items-center img {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  flex-shrink: 0 !important;
+}
+
+.cms-content .carousel-item h5,
+.cms-content .carousel-item .h5,
+.cms-content .carousel-item h6,
+.cms-content .carousel-item .h6,
+.cms-content .carousel-item .author h5,
+.cms-content .carousel-item .name h3 {
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  color: #111827 !important;
+  letter-spacing: 0.02em !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  line-height: 1.2 !important;
+}
+
+/* CMS Carousel Container & Navigation Arrows */
+.cms-content .carousel {
+  position: relative;
+  padding: 0 0 1rem;
+}
+
+.cms-carousel-arrows {
+  position: absolute;
+  top: 50%;
+  left: -1rem;
+  right: -1rem;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 20;
+}
+
+@media (min-width: 1280px) {
+  .cms-carousel-arrows {
+    left: -2.5rem;
+    right: -2.5rem;
+  }
+}
+
+.cms-carousel-btn,
+.cms-content .carousel-control-prev,
+.cms-content .carousel-control-next {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #e5e7eb;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  opacity: 1 !important;
+}
+
+.cms-carousel-btn:hover,
+.cms-content .carousel-control-prev:hover,
+.cms-content .carousel-control-next:hover {
+  background: var(--brand-red, #ed1c24);
+  color: #ffffff;
+  border-color: var(--brand-red, #ed1c24);
+  transform: scale(1.1);
+  box-shadow: 0 8px 20px -4px rgba(237, 28, 36, 0.35);
+}
+
+.cms-carousel-btn svg,
+.cms-content .carousel-control-prev svg,
+.cms-content .carousel-control-next svg {
+  stroke: currentColor;
+  stroke-width: 2.5;
 }
 
 .cms-content .carousel-indicators {
@@ -3028,7 +3589,7 @@ html[lang="ar"] .tab-content {
   justify-content: center;
   gap: 0.5rem;
   padding: 0;
-  margin: 1.5rem 0 0;
+  margin: 2rem 0 0;
   list-style: none;
 }
 
@@ -3040,6 +3601,7 @@ html[lang="ar"] .tab-content {
   background: #d1d5db;
   padding: 0;
   cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 .cms-content .carousel-indicators button.active {

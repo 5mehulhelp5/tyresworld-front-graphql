@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useScrollLock } from "@/lib/useScrollLock";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import {
@@ -32,7 +31,7 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { count: cartCount, items, currency, removeItem, updateQty } = useCart();
+  const { count: cartCount, items, currency, removeItem, updateQty, cart } = useCart();
 
   const locale = pathname.split("/")[1] === "ar" ? "ar" : "en";
   const nextLocale = locale === "ar" ? "en" : "ar";
@@ -57,11 +56,11 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
 
+  // Real cart subtotal (tax-excluding) straight from Magento; row_total is
+  // already tax-exclusive, so no hardcoded VAT-rate math is ever needed.
   const totalItemSums = items.reduce((acc, item) => acc + item.prices.row_total.value, 0);
-  const subtotalExclTax = totalItemSums / 1.15;
+  const subtotalExclTax = cart?.prices?.subtotal_excluding_tax?.value ?? totalItemSums;
   const fmtMoney = (v: number) => <Money value={v} currency={currency} digits={2} />;
-
-  useScrollLock(mobileOpen);
 
   /* ── Close everything on route change ───────────────────────── */
   useEffect(() => {
@@ -320,7 +319,8 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
                                        <span className="text-xs font-black text-[#ed1c24] tabular-nums">
                                          {fmtMoney(
                                            item.prices.price_including_tax?.value ??
-                                           (item.prices.price?.value != null ? Number((item.prices.price.value * 1.05).toFixed(2)) : 0)
+                                           item.prices.price?.value ??
+                                           0
                                          )}
                                        </span>
                                      </div>
@@ -403,7 +403,7 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
                           <Link
                             href={`/${locale}/tyres`}
                             onClick={() => setCartDropdownOpen(false)}
-                            className="bg-gray-950 hover:bg-[#ed1c24] text-white text-xs font-bold px-5 py-2.5 rounded-lg transition-colors cursor-pointer"
+                            className="btn-cta text-xs font-bold px-5 py-2.5 rounded-lg"
                           >
                             {locale === "ar" ? "تصفح الإطارات" : "START SHOPPING"}
                           </Link>
@@ -430,146 +430,155 @@ export default function Header({ menu = [] }: { menu?: NavItem[] }) {
 
 
       {/* ══════════════════════════════════════════════════════════
-          MOBILE DRAWER
+          MOBILE DRAWER (Smooth Slide-In & Slide-Out Transition)
       ══════════════════════════════════════════════════════════ */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
+      <div
+        className={`fixed inset-0 z-[100] lg:hidden ${
+          mobileOpen ? "visible pointer-events-auto" : "invisible pointer-events-none"
+        } transition-[visibility] duration-300 ease-in-out`}
+        style={{
+          transitionDelay: mobileOpen ? "0ms" : "300ms",
+        }}
+      >
+        {/* Backdrop */}
+        <div
+          className={`fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
+            mobileOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+          onClick={() => setMobileOpen(false)}
+        />
 
-          {/* Slide-in panel */}
-          <div className={`drawer-panel ${locale === "ar" ? "left-0 animate-slide-in-left" : "right-0 animate-slide-in-right"}`}>
+        {/* Slide-in panel */}
+        <div
+          className={`drawer-panel fixed top-0 bottom-0 h-full w-[300px] sm:w-[340px] max-w-[85vw] flex flex-col z-10 ${
+            locale === "ar" ? "left-0" : "right-0"
+          } transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform ${
+            locale === "ar"
+              ? mobileOpen
+                ? "translate-x-0"
+                : "-translate-x-full"
+              : mobileOpen
+              ? "translate-x-0"
+              : "translate-x-full"
+          }`}
+        >
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10 flex-shrink-0">
+            <Link href="/" onClick={() => setMobileOpen(false)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo/tires-logo-white.png"
+                alt="Tyresworld"
+                className="h-9 w-auto object-contain"
+              />
+            </Link>
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10 flex-shrink-0">
-              <Link href="/" onClick={() => setMobileOpen(false)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logo/tires-logo-white.png"
-                  alt="Tyresworld"
-                  className="h-9 w-auto object-contain"
-                />
-              </Link>
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
-                aria-label="Close menu"
-              >
-                <X size={18} />
-              </button>
-            </div>
+          {/* Search */}
+          <div className="px-5 py-4 border-b border-white/10 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                setSearchModalOpen(true);
+              }}
+              className="w-full flex items-center gap-3 bg-white/10 hover:bg-white/15 rounded-xl px-4 py-3 border border-white/10 text-white text-xs font-semibold transition-colors cursor-pointer text-start"
+            >
+              <Search size={16} className="text-[#ed1c24] flex-shrink-0" />
+              <span className="text-white/70">
+                {locale === "ar" ? "ابحث عن مقاس الإطار، السيارة، أو الماركة…" : "Search tyre size, vehicle or brand…"}
+              </span>
+            </button>
+          </div>
 
-            {/* Search */}
-            <div className="px-5 py-4 border-b border-white/10 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileOpen(false);
-                  setSearchModalOpen(true);
-                }}
-                className="w-full flex items-center gap-3 bg-white/10 hover:bg-white/15 rounded-xl px-4 py-3 border border-white/10 text-white text-xs font-semibold transition-colors cursor-pointer text-start"
-              >
-                <Search size={16} className="text-[#ed1c24] flex-shrink-0" />
-                <span className="text-white/70">
-                  {locale === "ar" ? "ابحث عن مقاس الإطار، السيارة، أو الماركة…" : "Search tyre size, vehicle or brand…"}
-                </span>
-              </button>
-            </div>
+          {/* Nav links */}
+          <nav className="flex-1 overflow-y-auto px-5 py-4">
+            {menu.map((item) => {
+              const hasChildren = !!item.children?.length;
+              const isActive = isNavActive(item, pathname, locale);
+              const isExpanded = mobileSubOpen === item.id;
 
-            {/* Nav links */}
-            <nav className="flex-1 overflow-y-auto px-5 py-4">
-              {menu.map((item) => {
-                const hasChildren = !!item.children?.length;
-                const isActive = isNavActive(item, pathname, locale);
-                const isExpanded = mobileSubOpen === item.id;
+              return (
+                <div key={item.id} className="border-b border-white/10">
+                  <div className="flex items-center justify-between">
+                    <Link
+                      href={navHref(item, locale)}
+                      onClick={() => setMobileOpen(false)}
+                      className="drawer-link"
+                      data-active={isActive}
+                    >
+                      {navLabel(item, locale)}
+                    </Link>
 
-                return (
-                  <div key={item.id} className="border-b border-white/10">
-                    <div className="flex items-center justify-between">
-                      <Link
-                        href={navHref(item, locale)}
-                        onClick={() => setMobileOpen(false)}
-                        className="drawer-link"
-                        data-active={isActive}
+                    {hasChildren && (
+                      <button
+                        type="button"
+                        onClick={() => setMobileSubOpen(isExpanded ? null : item.id)}
+                        className="w-9 h-9 -mr-1.5 flex items-center justify-center text-white/45 hover:text-white transition-colors cursor-pointer"
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.label}`}
                       >
-                        {navLabel(item, locale)}
-                      </Link>
-
-                      {hasChildren && (
-                        <button
-                          type="button"
-                          onClick={() => setMobileSubOpen(isExpanded ? null : item.id)}
-                          className="w-9 h-9 -mr-1.5 flex items-center justify-center text-white/45 hover:text-white transition-colors"
-                          aria-expanded={isExpanded}
-                          aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.label}`}
-                        >
-                          <ChevronDown
-                            size={16}
-                            className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-                          />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Sub-menu accordion */}
-                    {hasChildren && isExpanded && (
-                      <ul className={`pb-2 ${locale === "ar" ? "pr-3 border-r-2" : "pl-3 border-l-2"} border-white/10`}>
-                        {item.children!.map((child) => (
-                          <li key={child.id}>
-                            <Link
-                              href={navHref(child, locale)}
-                              onClick={() => setMobileOpen(false)}
-                              className="drawer-sublink"
-                              data-active={isNavActive(child, pathname, locale)}
-                            >
-                              {navLabel(child, locale)}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
+                        <ChevronDown
+                          size={16}
+                          className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                        />
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </nav>
 
-            {/* Panel footer */}
-            <div className="px-5 py-5 border-t border-white/10 flex flex-col gap-2.5 flex-shrink-0">
-              {/* Language / store switcher (commented out - English only)
-              <button
-                onClick={() => { switchLocale(); setMobileOpen(false); }}
-                className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-white/60 hover:text-white bg-white/8 hover:bg-white/12 rounded-xl transition-colors border border-white/10"
-              >
-                <span>{switchLabel}</span>
-                <span className="text-sm leading-none">{locale === "en" ? "🇸🇦" : "🇬🇧"}</span>
-              </button>
-              */}
-              <Link
-                href="/account"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-white/60 hover:text-white bg-white/8 hover:bg-white/12 rounded-xl transition-colors border border-white/10"
-              >
-                <User size={15} /> My Account
-              </Link>
-              <Link
-                href="/cart"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-center gap-2 py-3.5 bg-[#ed1c24] hover:bg-[#c6181d] text-white text-sm font-bold rounded-full transition-colors"
-              >
-                <ShoppingBag size={16} /> View Cart
-                {cartCount > 0 && (
-                  <span className="ml-0.5 bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {cartCount}
-                  </span>
-                )}
-              </Link>
-            </div>
+                  {/* Sub-menu accordion */}
+                  {hasChildren && isExpanded && (
+                    <ul className={`pb-2 ${locale === "ar" ? "pr-3 border-r-2" : "pl-3 border-l-2"} border-white/10`}>
+                      {item.children!.map((child) => (
+                        <li key={child.id}>
+                          <Link
+                            href={navHref(child, locale)}
+                            onClick={() => setMobileOpen(false)}
+                            className="drawer-sublink"
+                            data-active={isNavActive(child, pathname, locale)}
+                          >
+                            {navLabel(child, locale)}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+
+          {/* Panel footer */}
+          <div className="px-5 py-5 border-t border-white/10 flex flex-col gap-2.5 flex-shrink-0">
+            <Link
+              href="/account"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-white/60 hover:text-white bg-white/8 hover:bg-white/12 rounded-xl transition-colors border border-white/10"
+            >
+              <User size={15} /> My Account
+            </Link>
+            <Link
+              href="/cart"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center justify-center gap-2 py-3.5 bg-[#ed1c24] hover:bg-[#c6181d] text-white text-sm font-bold rounded-full transition-colors"
+            >
+              <ShoppingBag size={16} /> View Cart
+              {cartCount > 0 && (
+                <span className="ml-0.5 bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Item Removal Confirmation Modal */}
       {itemToRemove && (

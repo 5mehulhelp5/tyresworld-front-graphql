@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronDown, Search, Loader2 } from "lucide-react";
-import { useScrollLock } from "@/lib/useScrollLock";
 
 export interface FilterOption {
   label: string;
@@ -182,6 +182,12 @@ export default function FilterPanel({
     }
   }, [open, loading, visibleFilters.length, hasAnySelected, onClose]);
 
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   /* Close on Escape key */
   useEffect(() => {
     if (!open) return;
@@ -192,18 +198,27 @@ export default function FilterPanel({
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  useScrollLock(open);
-
-  if (!open || (!loading && visibleFilters.length === 0 && !hasAnySelected)) {
+  if (!mounted || typeof document === "undefined") {
     return null;
   }
 
-  return (
-    <>
+  if (!loading && visibleFilters.length === 0 && !hasAnySelected) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-[100] ${
+        open ? "visible pointer-events-auto" : "invisible pointer-events-none"
+      } transition-[visibility] duration-300 ease-in-out`}
+      style={{
+        transitionDelay: open ? "0ms" : "300ms",
+      }}
+    >
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] transition-opacity duration-300 ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-in-out ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
       />
@@ -212,7 +227,7 @@ export default function FilterPanel({
       <div
         ref={panelRef}
         dir={dir}
-        className={`fixed top-0 z-50 h-full w-[310px] sm:w-[340px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 bottom-0 z-10 h-full w-[310px] sm:w-[340px] max-w-[85vw] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform ${
           dir === "rtl"
             ? `left-0 ${open ? "translate-x-0" : "-translate-x-full"}`
             : `right-0 ${open ? "translate-x-0" : "translate-x-full"}`
@@ -301,6 +316,7 @@ export default function FilterPanel({
           )}
         </div>
       </div>
-    </>
+    </div>,
+    document.body
   );
 }

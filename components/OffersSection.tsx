@@ -181,9 +181,9 @@ export default function OffersSection() {
               <div className="mt-6">
                 <Link
                   href={`/${locale}/car-service`}
-                  className="inline-flex items-center justify-center bg-white text-gray-950 font-bold text-xs sm:text-sm px-6 py-2.5 rounded-lg hover:bg-[#ed1c24] hover:text-white transition-all duration-300 shadow-md group-hover:scale-105 cursor-pointer"
+                  className="btn-cta text-xs sm:text-sm px-6 py-2.5 rounded-lg shadow-md group-hover:scale-105 duration-300"
                 >
-                  {isAr ? "اعرف المزيد" : "Learn More"}
+                  <span>{isAr ? "اعرف المزيد" : "Learn More"}</span>
                 </Link>
               </div>
             </div>
@@ -218,9 +218,9 @@ export default function OffersSection() {
               <div className="mt-6">
                 <Link
                   href={`/${locale}/tyres?offers=Free+Wheel+Alignment`}
-                  className="inline-flex items-center justify-center bg-white text-gray-950 font-bold text-xs sm:text-sm px-6 py-2.5 rounded-lg hover:bg-[#ed1c24] hover:text-white transition-all duration-300 shadow-md group-hover:scale-105 cursor-pointer"
+                  className="btn-cta text-xs sm:text-sm px-6 py-2.5 rounded-lg shadow-md group-hover:scale-105 duration-300"
                 >
-                  {isAr ? "اعرف المزيد" : "Learn More"}
+                  <span>{isAr ? "اعرف المزيد" : "Learn More"}</span>
                 </Link>
               </div>
             </div>

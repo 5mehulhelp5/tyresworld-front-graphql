@@ -2,22 +2,40 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   MapPin,
   Search,
   Crosshair,
   ArrowRight,
+  ArrowLeft,
   ChevronDown,
   Navigation,
   Loader2,
-  CheckCircle2,
   Store,
   Truck,
   Package,
 } from "lucide-react";
 import StoreLocatorMap, { type StoreLocation } from "@/components/StoreLocatorMap";
 import { useCart } from "@/lib/cart-context";
+
+export interface MobileVanItem {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  lat: number;
+  lng: number;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  shipping_amount?: string | null;
+  shipping_fee?: string;
+  installer_type?: string;
+  delivery_mode?: string;
+  openingHoursByDay?: string[][];
+  distanceKm?: number;
+}
 
 // Haversine distance calculator
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -54,27 +72,21 @@ function StoreBadgeIcon() {
   );
 }
 
-const DEFAULT_UAE_CITIES = [
-  "All",
-  "Abu Dhabi",
-  "Ajman",
-  "Al Ain",
-  "Dubai",
-  "Fujairah",
-  "Ras Al-Khaimah",
-  "Sharjah",
-];
-
-const UAE_CITIES = [
-  "Dubai",
-  "Abu Dhabi",
-  "Sharjah",
-  "Ajman",
-  "Ras Al Khaimah",
-  "Fujairah",
-  "Umm Al Quwain",
-  "Al Ain",
-];
+function MobileVanBadgeIcon() {
+  return (
+    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-emerald-300/80 bg-[#f0fbf5] flex flex-col items-center justify-center shadow-2xs">
+      <img
+        src="/img/installer-badge.png"
+        alt="Mobile Van"
+        className="w-full h-full object-contain p-0.5"
+        onError={(e) => {
+          (e.currentTarget as HTMLElement).style.display = "none";
+        }}
+      />
+      <Truck className="w-5 h-5 text-emerald-700 hidden" />
+    </div>
+  );
+}
 
 export default function StoreLocatorPage() {
   return (
@@ -87,13 +99,11 @@ export default function StoreLocatorPage() {
 function StoreLocatorContent() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const locale = pathname.split("/")[1] === "ar" ? "ar" : "en";
   const isAr = locale === "ar";
   const { cartId, cartToken, refresh, items, ready } = useCart();
 
-  // Empty cart guard: this page is for choosing delivery/installer for
-  // items already in the cart — nothing to redirect to /en/checkout for.
+  // Empty cart guard
   useEffect(() => {
     if (ready && items.length === 0) {
       router.replace(`/${locale}/cart`);
@@ -101,20 +111,20 @@ function StoreLocatorContent() {
   }, [ready, items.length, router, locale]);
 
   // API Data State (100% Dynamic from Magento GraphQL / API)
-  const [cities, setCities] = useState<string[]>(DEFAULT_UAE_CITIES);
+  const [cities, setCities] = useState<string[]>([]);
   const [branches, setBranches] = useState<StoreLocation[]>([]);
+  const [mobileVans, setMobileVans] = useState<MobileVanItem[]>([]);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Delivery Mode State
   const [deliveryMode, setDeliveryMode] = useState<"install_outlet" | "mobile_van" | "free_shipping">("install_outlet");
   const [mobileAddress, setMobileAddress] = useState("");
-  const [mobileCity, setMobileCity] = useState("Dubai");
-  const [mobileDate, setMobileDate] = useState("");
-  const [mobileTimeSlot, setMobileTimeSlot] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
 
   // Interactive UI State
-  const [selectedCity, setSelectedCity] = useState<string>("All");
+  const [selectedCity, setSelectedCity] = useState<string>(isAr ? "الكل" : "All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -122,10 +132,7 @@ function StoreLocatorContent() {
 
   // Accordion Expand States
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
-
-  // Booking Form Inputs
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+  const [expandedVanId, setExpandedVanId] = useState<string | null>(null);
 
   // Generate upcoming 10 days for date selector
   const upcomingDates = useMemo(() => {
@@ -137,10 +144,10 @@ function StoreLocatorContent() {
       const dateStr = d.toISOString().split("T")[0];
       const label =
         i === 0
-          ? `Today (${dateStr})`
+          ? isAr ? `اليوم (${dateStr})` : `Today (${dateStr})`
           : i === 1
-          ? `Tomorrow (${dateStr})`
-          : d.toLocaleDateString("en-GB", {
+          ? isAr ? `غداً (${dateStr})` : `Tomorrow (${dateStr})`
+          : d.toLocaleDateString(isAr ? "ar-AE" : "en-GB", {
               weekday: "short",
               day: "numeric",
               month: "short",
@@ -148,14 +155,7 @@ function StoreLocatorContent() {
       dates.push({ value: dateStr, label });
     }
     return dates;
-  }, []);
-
-  useEffect(() => {
-    if (upcomingDates.length > 0) {
-      if (!selectedDate) setSelectedDate(upcomingDates[0].value);
-      if (!mobileDate) setMobileDate(upcomingDates[0].value);
-    }
-  }, [upcomingDates, selectedDate, mobileDate]);
+  }, [isAr]);
 
   // Fetch all data from API dynamically
   useEffect(() => {
@@ -171,10 +171,11 @@ function StoreLocatorContent() {
             setBranches(data.branches);
             setSelectedStoreId(data.branches[0].id);
           }
+          if (data.mobileVans?.length) {
+            setMobileVans(data.mobileVans);
+          }
           if (data.timeSlots?.length) {
             setTimeSlots(data.timeSlots);
-            if (!selectedTimeSlot) setSelectedTimeSlot(data.timeSlots[0]);
-            if (!mobileTimeSlot) setMobileTimeSlot(data.timeSlots[0]);
           }
         }
       } catch (err) {
@@ -189,28 +190,48 @@ function StoreLocatorContent() {
     };
   }, [locale]);
 
-  // Handle User Geolocation
+  const [isGeoAddress, setIsGeoAddress] = useState(false);
+
+  // Handle User Geolocation with Reverse Geocoding
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      alert(isAr ? "متصفحك لا يدعم تحديد الموقع الجغرافي." : "Geolocation is not supported by your browser.");
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setSelectedCity("All");
-        setLocating(false);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords({ lat, lng });
+        setSelectedCity(isAr ? "الكل" : "All");
+
+        try {
+          const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+          const data = await res.json();
+          if (data?.address) {
+            setSearchQuery(data.address);
+            setIsGeoAddress(true);
+          } else {
+            setSearchQuery(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+            setIsGeoAddress(true);
+          }
+        } catch {
+          setSearchQuery(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          setIsGeoAddress(true);
+        } finally {
+          setLocating(false);
+        }
       },
       (err) => {
         console.warn("Geolocation error:", err.message);
         setLocating(false);
       },
-      { timeout: 10000 }
+      { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
-  // Filtered & Sorted Stores
+  // Filtered & Sorted Outlet Stores
   const filteredBranches = useMemo(() => {
     const baseCoords = userCoords || { lat: 24.3682674, lng: 54.5124881 };
 
@@ -219,7 +240,7 @@ function StoreLocatorContent() {
       return { ...store, distance };
     });
 
-    if (selectedCity && selectedCity !== "All") {
+    if (selectedCity && selectedCity !== "All" && selectedCity !== "الكل") {
       result = result.filter(
         (s) =>
           s.city.toLowerCase() === selectedCity.toLowerCase() ||
@@ -227,7 +248,7 @@ function StoreLocatorContent() {
       );
     }
 
-    if (searchQuery.trim()) {
+    if (searchQuery.trim() && !isGeoAddress) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (s) =>
@@ -245,15 +266,66 @@ function StoreLocatorContent() {
     });
 
     return result;
-  }, [branches, selectedCity, searchQuery, userCoords]);
+  }, [branches, selectedCity, searchQuery, userCoords, isGeoAddress]);
+
+  // Sync default selectedStoreId with filtered list
+  useEffect(() => {
+    if (filteredBranches.length > 0) {
+      const exists = filteredBranches.some((b) => b.id === selectedStoreId);
+      if (!exists || !selectedStoreId) {
+        setSelectedStoreId(filteredBranches[0].id);
+      }
+    }
+  }, [filteredBranches, selectedStoreId]);
+
+  // Filtered & Sorted Mobile Vans
+  const filteredMobileVans = useMemo(() => {
+    const baseCoords = userCoords || { lat: 24.3682674, lng: 54.5124881 };
+
+    let result = mobileVans.map((van) => {
+      const distance = calculateDistanceKm(baseCoords.lat, baseCoords.lng, van.lat, van.lng);
+      return { ...van, distanceKm: distance };
+    });
+
+    if (selectedCity && selectedCity !== "All" && selectedCity !== "الكل") {
+      result = result.filter(
+        (v) =>
+          v.city.toLowerCase() === selectedCity.toLowerCase() ||
+          v.name.toLowerCase().includes(selectedCity.toLowerCase()) ||
+          v.address.toLowerCase().includes(selectedCity.toLowerCase())
+      );
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (v) =>
+          v.name.toLowerCase().includes(q) ||
+          v.city.toLowerCase().includes(q) ||
+          v.address.toLowerCase().includes(q)
+      );
+    }
+
+    result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+    return result;
+  }, [mobileVans, selectedCity, searchQuery, userCoords]);
 
   // Save installer selection to Magento quote & proceed to checkout
   const handleConfirmStoreBooking = async (branch: StoreLocation) => {
+    if (!selectedDate) {
+      alert(isAr ? "يرجى اختيار تاريخ التركيب المفضل." : "Please select a preferred fitting date.");
+      return;
+    }
+    if (!selectedTimeSlot) {
+      alert(isAr ? "يرجى اختيار وقت التركيب المفضل." : "Please select a preferred time slot.");
+      return;
+    }
+
     const installData = {
       type: "install_outlet",
       branch: { id: branch.id, name: branch.name, address: branch.address, city: branch.city },
-      date: selectedDate || upcomingDates[0]?.value,
-      time: selectedTimeSlot || timeSlots[0] || "10:00 AM - 12:00 PM",
+      date: selectedDate,
+      time: selectedTimeSlot,
     };
     try {
       localStorage.setItem("selected_installation", JSON.stringify(installData));
@@ -282,13 +354,29 @@ function StoreLocatorContent() {
     router.push(`/${locale}/checkout`);
   };
 
-  const handleConfirmMobileVan = async () => {
+  const handleConfirmMobileVan = async (van: MobileVanItem) => {
+    if (!mobileAddress.trim()) {
+      alert(isAr ? "يرجى إدخال عنوان / موقع التركيب." : "Please enter your fitting location/address.");
+      return;
+    }
+    if (!selectedDate) {
+      alert(isAr ? "يرجى اختيار تاريخ التركيب المفضل." : "Please select a preferred fitting date.");
+      return;
+    }
+    if (!selectedTimeSlot) {
+      alert(isAr ? "يرجى اختيار وقت التركيب المفضل." : "Please select a preferred time slot.");
+      return;
+    }
+
     const installData = {
       type: "mobile_van",
-      mobileAddress: mobileAddress || "Customer Location",
-      city: mobileCity,
-      date: mobileDate || upcomingDates[0]?.value,
-      time: mobileTimeSlot || timeSlots[0] || "10:00 AM - 12:00 PM",
+      vanId: van.id,
+      vanName: van.name,
+      mobileAddress,
+      city: van.city,
+      date: selectedDate,
+      time: selectedTimeSlot,
+      shipping_amount: van.shipping_amount,
     };
     try {
       localStorage.setItem("selected_installation", JSON.stringify(installData));
@@ -303,7 +391,8 @@ function StoreLocatorContent() {
             op: "setInstallerSelection",
             cartId,
             deliveryMode: "mobile_van_service",
-            pickupLocation: `${mobileAddress}, ${mobileCity}`,
+            storeId: van.id,
+            pickupLocation: `${mobileAddress || van.address}, ${van.city}`,
             pickupDate: installData.date,
             pickupTime: installData.time,
             token: cartToken || undefined,
@@ -346,12 +435,12 @@ function StoreLocatorContent() {
   };
 
   return (
-    <div className="bg-[#f9fafb] min-h-screen pb-20 text-gray-900 font-sans">
+    <div dir={isAr ? "rtl" : "ltr"} className="bg-[#f9fafb] min-h-screen pb-20 text-gray-900 font-sans">
       {/* ── Top Banner: SELECT DELIVERY OPTION ── */}
       <div className="relative bg-black py-9 sm:py-11 text-center">
         <div className="container mx-auto px-4 relative z-10">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase text-white tracking-wider font-sans">
-            SELECT DELIVERY OPTION
+            {isAr ? "اختر خيار التوصيل والتركيب" : "SELECT DELIVERY OPTION"}
           </h1>
         </div>
       </div>
@@ -361,10 +450,12 @@ function StoreLocatorContent() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-gray-900 font-sans">
-              TYRE FITTING PARTNERS NEAR YOU
+              {isAr ? "شركاء تركيب الإطارات بالقرب منك" : "TYRE FITTING PARTNERS NEAR YOU"}
             </h2>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              Enter your area or city to see nearby fitting partners.
+              {isAr
+                ? "أدخل منطقتك أو مدينتك لعرض شركاء التركيب القريبين منك."
+                : "Enter your area or city to see nearby fitting partners."}
             </p>
           </div>
 
@@ -391,44 +482,58 @@ function StoreLocatorContent() {
         </div>
 
         {/* Search Row */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
-          <div className="relative flex-1 bg-white border border-gray-300 rounded-lg flex items-center px-3.5 py-2 focus-within:border-black transition-all">
-            <MapPin className="w-4 h-4 text-gray-400 shrink-0 mr-2.5" />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 mb-6">
+          <div className="relative flex-1 bg-white border border-gray-300 rounded-xl flex items-center px-3.5 py-2.5 shadow-2xs focus-within:border-black transition-all">
+            <MapPin className="w-4 h-4 text-gray-400 shrink-0 rtl:ml-2.5 ltr:mr-2.5" />
             <input
               type="text"
-              placeholder="Enter area or city"
+              placeholder={isAr ? "أدخل اسم المنطقة أو المدينة" : "Enter area or city"}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsGeoAddress(false);
+              }}
               className="w-full text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 outline-none bg-transparent"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-xs text-gray-400 hover:text-gray-700 font-bold px-1"
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsGeoAddress(false);
+                }}
+                className="text-xs text-gray-400 hover:text-gray-700 font-bold px-1.5 cursor-pointer"
               >
                 ✕
               </button>
             )}
           </div>
 
-          <button
-            type="button"
-            className="bg-black hover:bg-[#ed1c24] text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-xs sm:text-sm transition-colors cursor-pointer shrink-0"
-          >
-            <Search size={15} />
-            <span>Search</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              className="bg-black hover:bg-[#ed1c24] text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-xs sm:text-sm transition-colors cursor-pointer shrink-0 shadow-2xs"
+            >
+              <Search size={15} />
+              <span>{isAr ? "بحث" : "Search"}</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={locating}
-            className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0 disabled:opacity-60"
-          >
-            <Crosshair size={15} className={locating ? "animate-spin text-[#ed1c24]" : "text-gray-600"} />
-            <span>{locating ? "Locating..." : "Use my location"}</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={locating}
+              className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0 disabled:opacity-60 shadow-2xs"
+            >
+              {locating ? (
+                <Loader2 size={15} className="animate-spin text-[#ed1c24]" />
+              ) : (
+                <Crosshair size={15} className="text-emerald-700" />
+              )}
+              <span className="text-emerald-950 font-semibold">
+                {locating ? (isAr ? "جاري التحديد..." : "Locating...") : isAr ? "استخدم موقعي" : "Use my location"}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* 3 Delivery Option Cards */}
@@ -437,7 +542,7 @@ function StoreLocatorContent() {
           <button
             type="button"
             onClick={() => setDeliveryMode("install_outlet")}
-            className={`text-left p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
+            className={`p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
               deliveryMode === "install_outlet"
                 ? "border-2 border-[#ed1c24] bg-[#f0f9f6] shadow-xs"
                 : "border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
@@ -450,15 +555,17 @@ function StoreLocatorContent() {
             >
               <Store size={20} />
             </div>
-            <h3 className="font-bold text-sm text-gray-900">Install at Outlet</h3>
-            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Visit our outlet for professional installation</p>
+            <h3 className="font-bold text-sm text-gray-900">{isAr ? "التركيب في الفرع" : "Install at Outlet"}</h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+              {isAr ? "قم بزيارة فرعنا للتركيب الاحترافي" : "Visit our outlet for professional installation"}
+            </p>
           </button>
 
           {/* Option 2: Mobile Van Service */}
           <button
             type="button"
             onClick={() => setDeliveryMode("mobile_van")}
-            className={`text-left p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
+            className={`p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
               deliveryMode === "mobile_van"
                 ? "border-2 border-[#ed1c24] bg-[#f0f9f6] shadow-xs"
                 : "border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
@@ -471,15 +578,17 @@ function StoreLocatorContent() {
             >
               <Truck size={20} />
             </div>
-            <h3 className="font-bold text-sm text-gray-900">Mobile Van Service</h3>
-            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Our mobile van comes to your location</p>
+            <h3 className="font-bold text-sm text-gray-900">{isAr ? "خدمة الفان المتنقل" : "Mobile Van Service"}</h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+              {isAr ? "الفان المتنقل يصل إلى موقعك" : "Our mobile van comes to your location"}
+            </p>
           </button>
 
           {/* Option 3: Free Shipping */}
           <button
             type="button"
             onClick={() => setDeliveryMode("free_shipping")}
-            className={`text-left p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
+            className={`p-5 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center text-center ${
               deliveryMode === "free_shipping"
                 ? "border-2 border-[#ed1c24] bg-[#f0f9f6] shadow-xs"
                 : "border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
@@ -492,12 +601,14 @@ function StoreLocatorContent() {
             >
               <Package size={20} />
             </div>
-            <h3 className="font-bold text-sm text-gray-900">Free Shipping</h3>
-            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Delivery without fitment service</p>
+            <h3 className="font-bold text-sm text-gray-900">{isAr ? "شحن مجاني" : "Free Shipping"}</h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+              {isAr ? "توصيل بدون خدمة تركيب" : "Delivery without fitment service"}
+            </p>
           </button>
         </div>
 
-        {/* Active Mode Content */}
+        {/* ════ Option 1 Content: Install at Outlet ════ */}
         {deliveryMode === "install_outlet" && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_520px] gap-6 items-start">
             {/* Left: Store Cards List */}
@@ -510,16 +621,18 @@ function StoreLocatorContent() {
                 </div>
               ) : filteredBranches.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-                  <p className="text-gray-500 text-sm">No fitting partners found for this search or city.</p>
+                  <p className="text-gray-500 text-sm">
+                    {isAr ? "لم يتم العثور على شركاء تركيب في هذا النطاق." : "No fitting partners found for this search or city."}
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedCity("All");
+                      setSelectedCity(isAr ? "الكل" : "All");
                       setSearchQuery("");
                     }}
-                    className="mt-3 text-xs font-bold text-[#ed1c24] hover:underline"
+                    className="mt-3 text-xs font-bold text-[#ed1c24] hover:underline cursor-pointer"
                   >
-                    Reset Filters
+                    {isAr ? "إعادة تعيين الفلاتر" : "Reset Filters"}
                   </button>
                 </div>
               ) : (
@@ -532,7 +645,7 @@ function StoreLocatorContent() {
                       key={branch.id}
                       className={`relative bg-white rounded-xl border transition-all ${
                         isSelected
-                          ? "border-gray-300 shadow-xs border-l-4 border-l-[#ed1c24]"
+                          ? "border-gray-300 shadow-xs rtl:border-r-4 rtl:border-r-[#ed1c24] ltr:border-l-4 ltr:border-l-[#ed1c24]"
                           : "border-gray-200/90 hover:border-gray-300"
                       } p-4 sm:p-5`}
                     >
@@ -549,7 +662,7 @@ function StoreLocatorContent() {
                           {branch.distance !== undefined && (
                             <p className="text-xs font-bold text-gray-800 mt-1.5 flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#ed1c24]" />
-                              <span>{branch.distance.toFixed(2)} kilometer</span>
+                              <span>{branch.distance.toFixed(2)} {isAr ? "كيلومتر" : "kilometer"}</span>
                             </p>
                           )}
                         </div>
@@ -576,14 +689,14 @@ function StoreLocatorContent() {
                             className="flex items-center gap-1.5 hover:text-[#ed1c24] transition-colors"
                           >
                             <Navigation size={13} className="text-gray-400" />
-                            <span>Directions</span>
+                            <span>{isAr ? "الاتجاهات" : "Directions"}</span>
                           </a>
                           <button
                             type="button"
                             onClick={() => setSelectedStoreId(branch.id)}
                             className="flex items-center gap-1 hover:text-gray-900 transition-colors cursor-pointer text-gray-500"
                           >
-                            <span>See on Map</span>
+                            <span>{isAr ? "عرض على الخريطة" : "See on Map"}</span>
                           </button>
                         </div>
 
@@ -593,10 +706,10 @@ function StoreLocatorContent() {
                             setSelectedStoreId(branch.id);
                             setExpandedStoreId(isExpanded ? null : branch.id);
                           }}
-                          className="bg-[#ed1c24] hover:bg-[#c6181d] active:bg-[#aa1217] text-white font-bold text-xs px-4 py-2 rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto"
+                          className="bg-[#ed1c24] hover:bg-[#c6181d] active:bg-[#aa1217] text-white font-bold text-xs px-4 py-2 rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer rtl:mr-auto ltr:ml-auto"
                         >
-                          <span>Book Installer</span>
-                          <ArrowRight size={13} />
+                          <span>{isAr ? "احجز المركز" : "Book Installer"}</span>
+                          <ArrowRight size={13} className="rtl:rotate-180" />
                         </button>
                       </div>
 
@@ -604,16 +717,19 @@ function StoreLocatorContent() {
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t border-gray-100 bg-[#f9fafb] -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 rounded-b-xl animate-in fade-in duration-200">
                           <p className="text-xs font-extrabold uppercase text-gray-900 mb-3 tracking-wider">
-                            Select Fitting Date & Time Slot
+                            {isAr ? "اختر موعد ووقت التركيب" : "Select Fitting Date & Time Slot"}
                           </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 mb-1">Preferred Date</label>
+                              <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                {isAr ? "التاريخ المفضل" : "Preferred Date"}
+                              </label>
                               <select
                                 value={selectedDate}
                                 onChange={(e) => setSelectedDate(e.target.value)}
-                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black"
+                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black cursor-pointer"
                               >
+                                <option value="">{isAr ? "اختر التاريخ" : "Select Date"}</option>
                                 {upcomingDates.map((d) => (
                                   <option key={d.value} value={d.value}>
                                     {d.label}
@@ -622,12 +738,15 @@ function StoreLocatorContent() {
                               </select>
                             </div>
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 mb-1">Time Slot</label>
+                              <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                {isAr ? "الوقت المفضل" : "Time Slot"}
+                              </label>
                               <select
                                 value={selectedTimeSlot}
                                 onChange={(e) => setSelectedTimeSlot(e.target.value)}
-                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black"
+                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black cursor-pointer"
                               >
+                                <option value="">{isAr ? "اختر الوقت" : "Select Time Slot"}</option>
                                 {(timeSlots.length > 0
                                   ? timeSlots
                                   : [
@@ -651,8 +770,204 @@ function StoreLocatorContent() {
                             onClick={() => handleConfirmStoreBooking(branch)}
                             className="w-full bg-black hover:bg-[#ed1c24] text-white font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
                           >
-                            <span>Confirm & Proceed to Checkout</span>
-                            <ArrowRight size={14} />
+                            <span>{isAr ? "تأكيد والمتابعة إلى الدفع" : "Confirm & Proceed to Checkout"}</span>
+                            <ArrowRight size={14} className="rtl:rotate-180" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {/* Back to Cart Button */}
+              <div className="pt-2">
+                <Link
+                  href={`/${locale}/cart`}
+                  className="inline-flex items-center gap-2 bg-[#f3f4f6] hover:bg-gray-200 text-gray-800 font-bold text-xs px-4 py-2.5 rounded-lg border border-gray-300 transition-colors shadow-2xs cursor-pointer"
+                >
+                  <span className="rtl:rotate-180">←</span>
+                  <span>{isAr ? "الرجوع إلى السلة" : "Back to Cart"}</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Right: Map */}
+            <div className="sticky top-24 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs h-[600px]">
+              <StoreLocatorMap
+                stores={filteredBranches}
+                selectedStoreId={selectedStoreId}
+                userCoords={userCoords}
+                onSelectStore={(store: StoreLocation) => {
+                  setSelectedStoreId(store.id);
+                  setExpandedStoreId(store.id);
+                }}
+                locale={locale}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ════ Option 2 Content: Mobile Van Service ════ */}
+        {deliveryMode === "mobile_van" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {loading ? (
+                [1, 2, 3, 4].map((i) => (
+                  <div key={i} className="bg-white rounded-2xl border border-gray-200 p-5 animate-pulse space-y-2.5">
+                    <div className="h-4 bg-gray-200 rounded w-2/3" />
+                    <div className="h-3 bg-gray-200 rounded w-4/5" />
+                    <div className="h-8 bg-gray-100 rounded w-1/3 mt-2" />
+                  </div>
+                ))
+              ) : filteredMobileVans.length === 0 ? (
+                <div className="col-span-full bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-500">
+                  <p className="text-sm font-bold text-gray-900 mb-1">
+                    {isAr ? "لم يتم العثور على خدمات الفان المتنقل في هذه المنطقة" : "No Mobile Van services found in this area"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {isAr ? "يرجى اختيار مدينة أخرى أو اختيار (الكل)." : "Try searching for a different city or select 'All'."}
+                  </p>
+                </div>
+              ) : (
+                filteredMobileVans.map((van) => {
+                  const isExpanded = expandedVanId === van.id;
+
+                  return (
+                    <div
+                      key={van.id}
+                      className="bg-white rounded-2xl border border-gray-200/90 hover:border-gray-300 transition-all p-4 sm:p-5 shadow-2xs"
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <MobileVanBadgeIcon />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-extrabold text-xs sm:text-sm text-gray-950 uppercase tracking-tight line-clamp-1">
+                            {van.name}
+                          </h4>
+                          <p className="text-xs text-gray-500 flex items-start gap-1 mt-1 leading-snug">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                            <span>{van.address || van.city}</span>
+                          </p>
+                          {van.distanceKm !== undefined && (
+                            <p className="text-xs font-bold text-gray-800 mt-1.5 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#ed1c24]" />
+                              <span>{van.distanceKm.toFixed(2)} {isAr ? "كيلومتر" : "kilometers"}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Bottom Actions Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-gray-100">
+                        <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
+                          {van.whatsapp && (
+                            <a
+                              href={`https://wa.me/${van.whatsapp.replace(/[^0-9]/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
+                            >
+                              <WhatsAppIcon />
+                              <span>WhatsApp</span>
+                            </a>
+                          )}
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${van.lat},${van.lng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1.5 hover:text-[#ed1c24] transition-colors"
+                          >
+                            <Navigation size={13} className="text-gray-400" />
+                            <span>{isAr ? "الاتجاهات" : "Directions"}</span>
+                          </a>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setExpandedVanId(isExpanded ? null : van.id)}
+                          className="bg-[#ed1c24] hover:bg-[#c6181d] active:bg-[#aa1217] text-white font-bold text-xs px-4 py-2 rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer rtl:mr-auto ltr:ml-auto"
+                        >
+                          <span>{isAr ? "احجز الفان المتنقل" : "Book Mobile Van"}</span>
+                          <ArrowRight size={13} className="rtl:rotate-180" />
+                        </button>
+                      </div>
+
+                      {/* Expandable Booking Form Drawer */}
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 bg-[#f9fafb] -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-4 sm:p-5 rounded-b-xl animate-in fade-in duration-200">
+                          <p className="text-xs font-extrabold uppercase text-gray-900 mb-3 tracking-wider">
+                            {isAr ? "تفاصيل حجز الفان المتنقل" : "Mobile Van Booking Details"}
+                          </p>
+
+                          <div className="space-y-3 mb-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                {isAr ? "موقع / عنوان التركيب" : "Fitting Location / Address"} <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                placeholder={isAr ? "المبنى، الشارع، أو المنطقة..." : "Building, street, community or area"}
+                                value={mobileAddress}
+                                onChange={(e) => setMobileAddress(e.target.value)}
+                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                  {isAr ? "التاريخ المفضل" : "Preferred Date"}
+                                </label>
+                                <select
+                                  value={selectedDate}
+                                  onChange={(e) => setSelectedDate(e.target.value)}
+                                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black cursor-pointer"
+                                >
+                                  <option value="">{isAr ? "اختر التاريخ" : "Select Date"}</option>
+                                  {upcomingDates.map((d) => (
+                                    <option key={d.value} value={d.value}>
+                                      {d.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                  {isAr ? "الوقت المفضل" : "Time Slot"}
+                                </label>
+                                <select
+                                  value={selectedTimeSlot}
+                                  onChange={(e) => setSelectedTimeSlot(e.target.value)}
+                                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 outline-none focus:border-black cursor-pointer"
+                                >
+                                  <option value="">{isAr ? "اختر الوقت" : "Select Time Slot"}</option>
+                                  {(timeSlots.length > 0
+                                    ? timeSlots
+                                    : [
+                                        "09:00 AM - 11:00 AM",
+                                        "11:00 AM - 01:00 PM",
+                                        "02:00 PM - 04:00 PM",
+                                        "04:00 PM - 06:00 PM",
+                                        "06:00 PM - 08:00 PM",
+                                      ]
+                                  ).map((t) => (
+                                    <option key={t} value={t}>
+                                      {t}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmMobileVan(van)}
+                            className="w-full bg-black hover:bg-[#ed1c24] text-white font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <span>{isAr ? "تأكيد ومتابعة إلى الدفع" : "Confirm Mobile Van & Proceed to Checkout"}</span>
+                            <ArrowRight size={14} className="rtl:rotate-180" />
                           </button>
                         </div>
                       )}
@@ -661,130 +976,22 @@ function StoreLocatorContent() {
                 })
               )}
             </div>
-
-            {/* Right: Map */}
-            <div className="sticky top-24 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs h-[600px]">
-              <StoreLocatorMap
-                stores={filteredBranches}
-                selectedStoreId={selectedStoreId}
-                onSelectStore={(store: StoreLocation) => {
-                  setSelectedStoreId(store.id);
-                  setExpandedStoreId(store.id);
-                }}
-              />
-            </div>
           </div>
         )}
 
-        {deliveryMode === "mobile_van" && (
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 max-w-2xl mx-auto shadow-xs">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-red-50 text-[#ed1c24] flex items-center justify-center">
-                <Truck size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-gray-900 uppercase">Mobile Van Service</h3>
-                <p className="text-xs text-gray-500">
-                  Our certified mobile tyre fitting van will come to your home, office, or anywhere in the UAE.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Fitting Location / Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Building, street, community or area"
-                  value={mobileAddress}
-                  onChange={(e) => setMobileAddress(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 outline-none focus:border-black"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    City <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={mobileCity}
-                    onChange={(e) => setMobileCity(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 outline-none focus:border-black bg-white"
-                  >
-                    {UAE_CITIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    Preferred Date <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={mobileDate}
-                    onChange={(e) => setMobileDate(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 outline-none focus:border-black bg-white"
-                  >
-                    {upcomingDates.map((d) => (
-                      <option key={d.value} value={d.value}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Time Slot <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={mobileTimeSlot}
-                  onChange={(e) => setMobileTimeSlot(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 outline-none focus:border-black bg-white"
-                >
-                  {(timeSlots.length > 0
-                    ? timeSlots
-                    : [
-                        "09:00 AM - 11:00 AM",
-                        "11:00 AM - 01:00 PM",
-                        "02:00 PM - 04:00 PM",
-                        "04:00 PM - 06:00 PM",
-                        "06:00 PM - 08:00 PM",
-                      ]
-                  ).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleConfirmMobileVan}
-              className="w-full bg-black hover:bg-[#ed1c24] text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider py-4 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <span>Confirm Mobile Van & Proceed to Checkout</span>
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        )}
-
+        {/* ════ Option 3 Content: Free Shipping ════ */}
         {deliveryMode === "free_shipping" && (
           <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 max-w-xl mx-auto shadow-xs text-center">
             <div className="w-16 h-16 rounded-2xl bg-red-50 text-[#ed1c24] flex items-center justify-center mx-auto mb-4">
               <Package size={32} />
             </div>
-            <h3 className="text-lg font-black text-gray-900 uppercase mb-2">Free Courier Shipping</h3>
+            <h3 className="text-lg font-black text-gray-900 uppercase mb-2">
+              {isAr ? "شحن مجاني مع التوصيل السريع" : "Free Courier Shipping"}
+            </h3>
             <p className="text-xs sm:text-sm text-gray-500 mb-6 leading-relaxed">
-              Your tyres will be delivered directly to your doorstep anywhere in the UAE without fitment service.
+              {isAr
+                ? "سيتم توصيل إطاراتك مباشرة إلى باب منزلك أو موقعك في أي مكان بالإمارات بدون خدمة تركيب."
+                : "Your tyres will be delivered directly to your doorstep anywhere in the UAE without fitment service."}
             </p>
 
             <button
@@ -792,8 +999,8 @@ function StoreLocatorContent() {
               onClick={handleConfirmFreeShipping}
               className="w-full bg-black hover:bg-[#ed1c24] text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider py-4 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
-              <span>Proceed to Shipping Address & Checkout</span>
-              <ArrowRight size={16} />
+              <span>{isAr ? "المتابعة إلى عنوان الشحن والدفع" : "Proceed to Shipping Address & Checkout"}</span>
+              <ArrowRight size={16} className="rtl:rotate-180" />
             </button>
           </div>
         )}

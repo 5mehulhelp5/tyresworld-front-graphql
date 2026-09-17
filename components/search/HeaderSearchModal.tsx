@@ -774,7 +774,7 @@ export default function HeaderSearchModal({
                     <button
                       type="button"
                       onClick={() => handleFinishVehicle("Standard")}
-                      className="inline-flex items-center gap-2 bg-[#ed1c24] hover:bg-black text-white text-xs sm:text-sm font-bold px-8 py-3 rounded-full transition-colors shadow-md cursor-pointer"
+                      className="btn-cta gap-2 text-xs sm:text-sm px-8 py-3 rounded-full shadow-md"
                     >
                       <span>{isAr ? "البحث عن الإطارات المناسبة" : "SEARCH MATCHING TYRES"}</span>
                     </button>

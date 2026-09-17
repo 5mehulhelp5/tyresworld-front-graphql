@@ -10,6 +10,7 @@ import { useOfferLabels } from "@/lib/useOfferLabels";
 import { useCart } from "@/lib/cart-context";
 import { Money } from "@/components/Price";
 import { isMotorcycleProduct } from "@/lib/magento";
+import { APP_CONFIG } from "@/src/config/app-config";
 
 /* ── Brand styling ─────────────────────────────────────────────── */
 const BRAND_STYLE: Record<string, { bg: string; text: string; tagline?: string }> = {
@@ -118,7 +119,7 @@ function WaIcon() {
 export default function TyreCard({ product }: { product: Product }) {
   const { brand, size, loadIndex, pattern, year, isRunFlat } = parseTyreName(product.name);
   const href     = product.urlKey ? `/en/product/${product.urlKey}` : product.sku ? `/product/${product.sku}` : "/";
-  const waUrl    = `https://wa.me/966500000000?text=${encodeURIComponent(`Hi, I'm interested in: ${product.name}`)}`;
+  const waUrl    = `https://api.whatsapp.com/send/?phone=${APP_CONFIG.contact.whatsapp}&text=${encodeURIComponent(`Hi, I'm interested in: ${product.name}`)}`;
   const bStyle   = BRAND_STYLE[brand.toLowerCase()] ?? { bg: "#fff", text: "#111" };
   const logoUrl = product.brandLogoUrl;
   const warranty = product.warrantyPeriod;

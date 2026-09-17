@@ -605,7 +605,7 @@ function AccountDashboard() {
           </aside>
 
           {/* Content Box */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 lg:p-8 min-w-0">
             {/* Dashboard tab */}
             {activeTab === "dashboard" && (
               <div>
@@ -743,8 +743,8 @@ function AccountDashboard() {
                 />
               ) : (
                 <div>
-                  <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 border-b border-gray-100 pb-4 mb-6">
-                    My Orders
+                  <h1 className="text-2xl font-black uppercase tracking-wider text-gray-900 pb-4 mb-6">
+                    MY ORDERS
                   </h1>
                   {orders.length === 0 ? (
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded px-4 py-3 text-sm">
@@ -757,7 +757,7 @@ function AccountDashboard() {
                     <OrdersList
                       orders={orders}
                       money={money}
-                      token={localStorage.getItem("customer_token")}
+                      token={typeof window !== "undefined" ? localStorage.getItem("customer_token") : null}
                       customerName={`${customer.firstname} ${customer.lastname}`}
                       onViewOrder={(number) => setSelectedOrderNumber(number)}
                     />
@@ -811,7 +811,7 @@ function AccountDashboard() {
                           <div className="p-3.5 flex-1 flex flex-col justify-between">
                             <div>
                               <p className="text-xs font-semibold text-gray-900 truncate">{p.name}</p>
-                              <p className="text-sm font-extrabold text-gray-900 mt-1">${p.price}</p>
+                              <p className="text-sm font-extrabold text-gray-900 mt-1">{money(p.price ?? 0, p.currency || "AED")}</p>
                             </div>
                             <button
                               onClick={() => moveToCart(item.id)}
@@ -1028,7 +1028,7 @@ function AccountDashboard() {
 
                     {/* Checkboxes */}
                     <div className="flex flex-col gap-2.5 mt-5">
-                      <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <label className="flex items-cente cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={changeEmail}
@@ -1153,38 +1153,6 @@ function AccountDashboard() {
                       className="bg-black hover:bg-[#ed1c24] text-white px-6 py-2.5 rounded font-black text-xs uppercase tracking-wider transition-colors disabled:opacity-60"
                     >
                       {profileSaving ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-
-                  {/* Danger zone — Delete Account */}
-                  <div className="border border-red-200 rounded-lg p-5 bg-red-50">
-                    <h2 className="text-xs font-black uppercase tracking-wider text-red-700 mb-2">
-                      Danger Zone
-                    </h2>
-                    <p className="text-sm text-red-600 mb-4">
-                      Permanently delete your account and all associated data. This action cannot be undone.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!confirm("Are you absolutely sure? This will permanently delete your account.")) return;
-                        const tok = localStorage.getItem("customer_token");
-                        const res = await fetch("/api/account", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ op: "deleteCustomer", token: tok }),
-                        });
-                        const data = await res.json() as { ok?: boolean; error?: string };
-                        if (data.ok) {
-                          localStorage.removeItem("customer_token");
-                          window.location.href = "/";
-                        } else {
-                          alert(data.error || "Failed to delete account. Please try again.");
-                        }
-                      }}
-                      className="border border-red-400 hover:bg-red-600 hover:text-white text-red-700 px-5 py-2 rounded font-black text-xs uppercase tracking-wider transition-colors"
-                    >
-                      Delete My Account
                     </button>
                   </div>
                 </form>
@@ -1424,9 +1392,27 @@ function OrderDetailView({
   const billing = order.billing_address;
   const shipping = order.shipping_address;
 
-  // Format tax display (sum all taxes)
+  const countryName = (code?: string) =>
+    code === "AE" ? "United Arab Emirates" : code === "SA" ? "Saudi Arabia" : code;
+
+  // Format tax display (sum all taxes) — real title/rate come straight from
+  // Magento's own tax line (CUSTOMER_ORDER_DETAIL_QUERY already fetches
+  // `title`/`rate`), never a hardcoded label/percentage.
   const taxSum = order.total.taxes?.reduce((sum: number, tax: any) => sum + (tax.amount?.value || 0), 0) || 0;
-  const taxCurrency = order.total.taxes?.[0]?.amount?.currency || "SAR";
+  const taxCurrency = order.total.taxes?.[0]?.amount?.currency || "AED";
+  const taxTitle = order.total.taxes?.[0]?.title || "Tax";
+  const taxRate = order.total.taxes?.[0]?.rate;
+
+  /* order.shipping_method/carrier are set on the order itself at placement
+     time (real CustomerOrder fields — confirmed via live schema
+     introspection), so they're always present. shipments[].tracking only
+     exists once a shipment has actually been created, so it's a fallback,
+     not the primary source. */
+  const shipmentTracking = order.shipments?.[0]?.tracking?.[0];
+  const shippingMethodLabel =
+    order.shipping_method ||
+    [order.carrier, shipmentTracking?.title || shipmentTracking?.carrier].filter(Boolean).join(" – ") ||
+    "Not yet dispatched";
 
   return (
     <div>
@@ -1513,12 +1499,12 @@ function OrderDetailView({
             <div className="flex justify-between items-center text-[12px] text-gray-600 font-medium">
               <span>Shipping & Handling</span>
               <span className="text-gray-900 font-bold">
-                {money(order.total.shipping_handling?.total_amount?.value || 0, order.total.shipping_handling?.total_amount?.currency || "SAR")}
+                {money(order.total.shipping_handling?.total_amount?.value || 0, order.total.shipping_handling?.total_amount?.currency || "AED")}
               </span>
             </div>
             {taxSum > 0 && (
               <div className="flex justify-between items-center text-[12px] text-gray-600 font-medium">
-                <span>VAT(15%)</span>
+                <span>{taxTitle}{taxRate ? ` (${taxRate}%)` : ""}</span>
                 <span className="text-gray-900 font-bold">{money(taxSum, taxCurrency)}</span>
               </div>
             )}
@@ -1548,7 +1534,7 @@ function OrderDetailView({
                 <p className="font-semibold text-gray-900">{billing.firstname} {billing.lastname}</p>
                 <p>{billing.street?.join(", ")}</p>
                 <p>{billing.city}{billing.region ? `, ${billing.region}` : ""}{billing.postcode ? `, ${billing.postcode}` : ""}</p>
-                <p>{billing.country_code === "SA" ? "Saudi Arabia" : billing.country_code}</p>
+                <p>{countryName(billing.country_code)}</p>
                 {billing.telephone && <p className="text-xs text-gray-500 mt-1">T: {billing.telephone}</p>}
               </>
             ) : (
@@ -1563,7 +1549,7 @@ function OrderDetailView({
             Shipping Method
           </div>
           <div className="p-5 text-left text-sm text-gray-800 leading-relaxed font-semibold">
-            Ship to an Installer Partners
+            {shippingMethodLabel}
           </div>
         </div>
 
@@ -1578,7 +1564,7 @@ function OrderDetailView({
                 <p className="font-semibold text-gray-900">{shipping.firstname} {shipping.lastname}</p>
                 <p>{shipping.street?.join(", ")}</p>
                 <p>{shipping.city}{shipping.region ? `, ${shipping.region}` : ""}{shipping.postcode ? `, ${shipping.postcode}` : ""}</p>
-                <p>{shipping.country_code === "SA" ? "Saudi Arabia" : shipping.country_code}</p>
+                <p>{countryName(shipping.country_code)}</p>
                 {shipping.telephone && <p className="text-xs text-gray-500 mt-1">T: {shipping.telephone}</p>}
               </>
             ) : (
@@ -1593,12 +1579,26 @@ function OrderDetailView({
             Payment Method
           </div>
           <div className="p-5 text-left text-sm text-gray-800 leading-relaxed font-semibold">
-            {order.payment_methods?.[0]?.name || "Cash payment after fitting/delivery"}
+            {order.payment_methods?.[0]?.name || "Not available"}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function formatOrderDate(dateStr: string) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr.replace(/-/g, "/"));
+    if (isNaN(d.getTime())) return dateStr;
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const year = String(d.getFullYear()).slice(-2);
+    return `${month}/${day}/${year}`;
+  } catch {
+    return dateStr;
+  }
 }
 
 function OrdersList({
@@ -1614,81 +1614,217 @@ function OrdersList({
   const router = useRouter();
   const pathname = usePathname();
   const locale = pathname.split("/")[1] === "ar" ? "ar" : "en";
+  const { syncCustomerCart } = useCart();
 
   const [reordering, setReordering] = useState<string | null>(null);
   const [reorderMsg, setReorderMsg] = useState<{ number: string; ok: boolean; msg: string } | null>(null);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   async function handleReorder(orderNumber: string) {
-    setReordering(orderNumber); setReorderMsg(null);
+    setReordering(orderNumber);
+    setReorderMsg(null);
     try {
+      const userToken = token || (typeof window !== "undefined" ? localStorage.getItem("customer_token") : null);
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "reorder", orderNumber, token }),
+        body: JSON.stringify({ op: "reorder", orderNumber, token: userToken }),
       });
-      const data = await res.json() as { cartId?: string; error?: string; userInputErrors?: { message: string }[] };
-      const errs = data.userInputErrors?.map((e: { message: string }) => e.message).join(", ");
-      const ok = !data.error && !errs;
-      setReorderMsg({ number: orderNumber, ok, msg: errs || data.error || "Items added to cart!" });
-      if (ok) {
+      const data = (await res.json()) as {
+        cartId?: string;
+        error?: string;
+        userErrors?: { message: string }[];
+        userInputErrors?: { message: string }[];
+      };
+      const errList = data.userErrors || data.userInputErrors || [];
+      const errMsg = errList.map((e) => e.message).join(", ");
+      const ok = !data.error && !errMsg;
+
+      if (!ok) {
+        setReorderMsg({ number: orderNumber, ok: false, msg: errMsg || data.error || "Failed to reorder items." });
+      } else {
+        /* reorderItems returns the id of whatever cart Magento just put the
+           items in — which the CartProvider's own in-memory cartIdRef may
+           not already match (e.g. if the customer's previous cart had
+           expired and Magento created a new one). Writing that id straight
+           to localStorage doesn't update the live ref, so a plain refresh()
+           could re-fetch the WRONG (stale) cart. syncCustomerCart() instead
+           re-resolves the customer's real active cart from Magento itself
+           and updates cart-context's state correctly either way. */
+        await syncCustomerCart().catch(() => {});
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("cart-updated"));
+        }
         router.push(`/${locale}/cart`);
       }
-    } catch { setReorderMsg({ number: orderNumber, ok: false, msg: "Network error" }); }
-    finally { setReordering(null); }
+    } catch (err: any) {
+      setReorderMsg({ number: orderNumber, ok: false, msg: err?.message || "Network error" });
+    } finally {
+      setReordering(null);
+    }
   }
 
-  const itemsToShow = limit ? orders.slice(0, limit) : orders;
+  const allOrders = limit ? orders.slice(0, limit) : orders;
+  const totalPages = Math.ceil(allOrders.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const currentOrders = allOrders.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-        <thead>
-          <tr className="bg-[#f8f9fa] border-b border-gray-200">
-            {["Order #", "Date", "Ship To", "Order Total", "Status", "Action"].map((h) => (
-              <th key={h} className="text-left text-[11px] font-black uppercase tracking-wider text-gray-700 px-4 py-3 whitespace-nowrap">
-                {h}
+    <div className="w-full">
+      {reorderMsg && (
+        <div
+          className={`mb-4 p-3 rounded text-xs flex items-start justify-between gap-2 border transition-all duration-200 ${
+            reorderMsg.ok
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-red-50 border-red-200 text-[#ed1c24]"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {!reorderMsg.ok && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0 text-[#ed1c24]" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span>{reorderMsg.msg}</span>
+          </div>
+          <button
+            onClick={() => setReorderMsg(null)}
+            className="text-gray-400 hover:text-gray-600 font-bold ml-2 cursor-pointer p-0.5"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <div className="overflow-x-auto border border-gray-200 rounded-none w-full">
+        <table className="w-full text-sm border-collapse table-fixed min-w-[620px]">
+          <thead>
+            <tr className="bg-[#fcfcfc] border-b border-gray-200 h-[44px]">
+              <th className="w-[24%] text-center text-xs font-bold text-gray-800 px-3 border-r border-gray-200 whitespace-nowrap">
+                Order #
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {itemsToShow.map((o, idx) => (
-            <tr key={o.number} className={idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]"}>
-              <td className="px-4 py-3.5 text-gray-900 font-bold">{o.number}</td>
-              <td className="px-4 py-3.5 text-gray-600">{o.order_date}</td>
-              <td className="px-4 py-3.5 text-gray-800">{customerName}</td>
-              <td className="px-4 py-3.5 text-gray-900 font-extrabold">
-                {money(o.total.grand_total.value, o.total.grand_total.currency)}
-              </td>
-              <td className="px-4 py-3.5 text-gray-700 font-semibold">{o.status}</td>
-              <td className="px-4 py-3.5 whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onViewOrder?.(o.number)}
-                    className="border border-gray-300 hover:bg-gray-50 text-gray-800 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
-                  >
-                    View Order
-                  </button>
-                  {token && (
-                    <button
-                      onClick={() => handleReorder(o.number)}
-                      disabled={reordering === o.number}
-                      className="border border-gray-300 hover:bg-gray-50 text-gray-800 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
-                    >
-                      Reorder
-                    </button>
-                  )}
-                </div>
-                {reorderMsg?.number === o.number && (
-                  <p className={`text-xs mt-1.5 font-medium ${reorderMsg.ok ? "text-emerald-600" : "text-[#ed1c24]"}`}>
-                    {reorderMsg.msg}
-                  </p>
-                )}
-              </td>
+              <th className="w-[16%] text-center text-xs font-bold text-gray-800 px-3 border-r border-gray-200 whitespace-nowrap">
+                Date
+              </th>
+              <th className="w-[20%] text-center text-xs font-bold text-gray-800 px-3 border-r border-gray-200 whitespace-nowrap">
+                Order Total
+              </th>
+              <th className="w-[18%] text-center text-xs font-bold text-gray-800 px-3 border-r border-gray-200 whitespace-nowrap">
+                Status
+              </th>
+              <th className="w-[22%] text-center text-xs font-bold text-gray-800 px-3 whitespace-nowrap">
+                Action
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {currentOrders.map((o) => {
+              const statusLower = o.status?.toLowerCase() || "";
+              const canReorder = !["processing", "payment_review", "payment review", "holded", "fraud"].includes(statusLower);
+
+              return (
+                <tr key={o.number} className="border-b border-gray-200 hover:bg-gray-50/60 transition-colors h-[56px]">
+                  <td className="px-3 text-center text-sm font-normal text-gray-800 border-r border-gray-200 whitespace-nowrap">
+                    {o.number}
+                  </td>
+                  <td className="px-3 text-center text-sm text-gray-700 border-r border-gray-200 whitespace-nowrap">
+                    {formatOrderDate(o.order_date)}
+                  </td>
+                  <td className="px-3 text-center text-sm text-gray-900 font-bold border-r border-gray-200 whitespace-nowrap tabular-nums">
+                    {money(o.total.grand_total.value, o.total.grand_total.currency)}
+                  </td>
+                  <td className="px-3 text-center text-sm text-gray-700 border-r border-gray-200 whitespace-nowrap">
+                    {o.status ? o.status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : ""}
+                  </td>
+                  <td className="px-3 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => onViewOrder?.(o.number)}
+                        className="w-[82px] h-[30px] flex items-center justify-center bg-[#f0f2f5] hover:bg-[#e4e7eb] text-gray-700 rounded text-xs font-normal transition-colors cursor-pointer"
+                      >
+                        View Order
+                      </button>
+                      {canReorder && (
+                        <button
+                          onClick={() => handleReorder(o.number)}
+                          disabled={reordering === o.number}
+                          className="w-[82px] h-[30px] flex items-center justify-center gap-1.5 bg-[#f0f2f5] hover:bg-[#e4e7eb] text-gray-700 rounded text-xs font-normal transition-colors disabled:opacity-70 cursor-pointer"
+                        >
+                          {reordering === o.number ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-600" />
+                              <span className="text-[11px]">Loading</span>
+                            </>
+                          ) : (
+                            "Reorder"
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer bar with Item count and Pagination */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 text-xs text-gray-600">
+        <div>
+          {allOrders.length} Item(s)
+        </div>
+        <div className="flex items-center gap-4">
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none"
+              >
+                ‹
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`px-2.5 py-1 border rounded text-xs font-semibold ${
+                    p === currentPage
+                      ? "bg-black text-white border-black"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none"
+              >
+                ›
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="border border-gray-300 rounded px-2.5 py-1 text-xs bg-white text-gray-800 outline-none cursor-pointer"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>per page</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
